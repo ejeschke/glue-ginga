@@ -5,6 +5,10 @@ sudo: false
 notifications:
   email: false
 
+os:
+  - linux
+  - osx
+
 env:
   global:
     - SETUP_XVFB=True

@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 entry_points = """
 [glue.plugins]
-myplugin=myplugin:setup
+ginga=glue_ginga:setup
 """
 
 try:
@@ -16,16 +16,16 @@ except (IOError, ImportError):
     with open('README.md') as infile:
         LONG_DESCRIPTION = infile.read()
 
-with open('myplugin/version.py') as infile:
+with open('glue_ginga/version.py') as infile:
     exec(infile.read())
 
-setup(name='myplugin',
+setup(name='glue-ginga',
       version=__version__,
-      description='My example plugin',
+      description='Ginga viewer plugin for glue',
       long_description=LONG_DESCRIPTION,
-      url="https://github.com/glue-viz/glue-plugin-template",
-      author='',
-      author_email='',
+      url="https://github.com/ejeschke/glue-ginga",
+      author='Eric Jeschke, Tom Robitaille',
+      author_email='eric@naoj.org, thomas.robitaille@gmail.com',
       packages = find_packages(),
       package_data={},
       entry_points=entry_points

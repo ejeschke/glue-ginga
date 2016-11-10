@@ -28,5 +28,7 @@ setup(name='glue-ginga',
       author_email='eric@naoj.org, thomas.robitaille@gmail.com',
       packages = find_packages(),
       package_data={},
-      entry_points=entry_points
-    )
+      entry_points=entry_points,
+      install_requires=['glueviz>=0.9.0',
+                        'ginga']
+     )

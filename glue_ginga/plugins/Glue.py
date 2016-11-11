@@ -9,8 +9,6 @@ The Glue plugin implements a Glue interface for the Ginga viewer.
 """
 import sys
 
-import numpy as np
-
 from ginga import GingaPlugin
 from ginga import AstroImage
 from ginga.gw import Widgets
@@ -53,17 +51,19 @@ class GingaHubListener(Callbacks, HubListener):
         image.set(name=name)
         self.datasrc[name] = image
         self.make_callback('data_in', image)
-    
+
     def _data_removed_cb(self, msg):
         data = msg.data
+        name = data.label
         image = self.datasrc.remove(name)
         self.make_callback('data_out', image)
 
     def get_data(self, name):
         return self.datasrc[name]
-        
-    
+
+
 class Glue(GingaPlugin.GlobalPlugin):
+    """Glue global plugin for Ginga reference viewer."""
 
     def __init__(self, fv):
         # superclass defines some variables for us, like logger
@@ -95,7 +95,7 @@ class Glue(GingaPlugin.GlobalPlugin):
         b.start_glue.add_callback('activated', lambda w: self.start_glue_cb())
         b.start_glue.set_tooltip("Start a Glue session")
         b.stop_glue.add_callback('activated', lambda w: self.stop_glue_cb())
-        
+
         b.put_data.add_callback('activated', lambda w: self.put_data_cb())
         b.get_data.add_callback('activated', lambda w: self.get_data_cb())
 
@@ -114,12 +114,11 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         container.add_widget(vbox, stretch=1)
 
-
     def put_data_cb(self):
         if self.glue_app is None:
             self.fv.show_error("No glue session running!")
             return
-        
+
         channel = self.fv.get_current_channel()
         if channel is None:
             self.fv.show_error("No active channel!")
@@ -132,7 +131,7 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         data_np = image.get_data()
         name = image.get('name', 'noname')
-        kwargs = { name: data_np }
+        kwargs = {name: data_np}
 
         try:
             self.glue_app.add_data(**kwargs)
@@ -140,13 +139,12 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         except Exception as e:
             self.fv.show_error("Error sending data to Glue: %s" % (str(e)))
-            
 
     def get_data_cb(self):
         if self.glue_app is None:
             self.fv.show_error("No glue session running!")
             return
-        
+
         #channel = self.fv.get_channel_on_demand('Glue')
         channel = self.fv.get_current_channel()
         if channel is None:
@@ -156,9 +154,8 @@ class Glue(GingaPlugin.GlobalPlugin):
         idx = self.w.dataitem.get_index()
         name = self.data_names[idx]
         dataobj = self.glue_hl.get_data(name)
-        
+
         channel.add_image(dataobj)
-        
 
     def _adj_data_list(self):
         # adjust available items list
@@ -173,10 +170,10 @@ class Glue(GingaPlugin.GlobalPlugin):
 
     def data_added_cb(self, hub, dataobj):
         self._adj_data_list()
-        
+
     def data_removed_cb(self, hub, dataobj):
         self._adj_data_list()
-            
+
     def start_glue_cb(self):
         self.glue_app = qglue()
         hub = self.glue_app.data_collection.hub
@@ -213,49 +210,21 @@ class Glue(GingaPlugin.GlobalPlugin):
         return 'glue'
 
 
-def qglue(**kwargs):
+def qglue():
     """
     Quickly send python variables to Glue for visualization.
-    The generic calling sequence is::
-      qglue(label1=data1, label2=data2, ..., [links=links])
-    The kewyords label1, label2, ... can be named anything besides ``links``
-    data1, data2, ... can be in many formats:
-      * A pandas data frame
-      * A path to a file
-      * A numpy array, or python list
-      * A numpy rec array
-      * A dictionary of numpy arrays with the same shape
-      * An astropy Table
-    ``Links`` is an optional list of link descriptions, each of which has
-    the format: ([left_ids], [right_ids], forward, backward)
-    Each ``left_id``/``right_id`` is a string naming a component in a dataset
-    (i.e., ``data1.x``). ``forward`` and ``backward`` are functions which
-    map quantities on the left to quantities on the right, and vice
-    versa. `backward` is optional
-    Examples::
-        balls = {'kg': [1, 2, 3], 'radius_cm': [10, 15, 30]}
-        cones = {'lbs': [5, 3, 3, 1]}
-        def lb2kg(lb):
-            return lb / 2.2
-        def kg2lb(kg):
-            return kg * 2.2
-        links = [(['balls.kg'], ['cones.lbs'], lb2kg, kg2lb)]
-        qglue(balls=balls, cones=cones, links=links)
-    :returns: A :class:`~glue.app.qt.application.GlueApplication` object
+
+    Returns
+    -------
+    ga : ``GlueApplication`` object
+
     """
     from glue.core import DataCollection
     from glue.app.qt import GlueApplication
 
-    links = kwargs.pop('links', None)
-
     dc = DataCollection()
-    for label, data in kwargs.items():
-        dc.extend(parse_data(data, label))
-
-    if links is not None:
-        dc.add_link(parse_links(dc, links))
 
     ga = GlueApplication(dc)
     return ga
 
-#END
+# END

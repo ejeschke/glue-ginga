@@ -1,17 +1,17 @@
-Glue
-====
+Glue-Ginga
+==========
 
-glue-ginga is a plugin viewer for the Glue visualizion toolkit that uses the Ginga viewer
-widget for viewing 2D images.  The Ginga widget provides an alternative viewer with many
-features and allows Ginga users to use a familiar interface.
+glue-ginga is a plugin viewer for the Glue viewer that uses the Ginga viewer widget
+for viewing 2D images.  The Ginga widget provides an alternative viewer with many
+customizable features and allows Ginga users to use a familiar interface.
 
 Features
 --------
 - Use the Ginga viewer widget in Glue
+- Read your custom Ginga key/mouse bindings
 
 Installation
 ------------
-
 python setup.py install
 
 Support

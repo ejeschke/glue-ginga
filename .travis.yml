@@ -16,8 +16,10 @@ env:
     - CONDA_DEPENDENCIES="glueviz pytest mock pyqt"
     - PIP_DEPENDENCIES="ginga"
   matrix:
-    - PYTHON_VERSION=2.7
-    - PYTHON_VERSION=3.5
+    - PYTHON_VERSION=2.7 PYQT_VERSION=4
+    - PYTHON_VERSION=3.5 PYQT_VERSION=4
+    - PYTHON_VERSION=2.7 PYQT_VERSION=5
+    - PYTHON_VERSION=3.5 PYQT_VERSION=5
 
 install:
   - git clone git://github.com/astropy/ci-helpers.git

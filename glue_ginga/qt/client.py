@@ -57,13 +57,13 @@ class GingaClient(ImageClient):
 
     def show_crosshairs(self, x, y):
         self.clear_crosshairs()
-        c = self._canvas.viewer.getDrawClass('point')(x, y, 6, color='red',
+        c = self._canvas.viewer.get_draw_class('point')(x, y, 6, color='red',
                                                       style='plus')
         self._canvas.add(c, tag=self._crosshair_id, redraw=True)
 
     def clear_crosshairs(self):
         try:
-            self._canvas.deleteObjectsByTag([self._crosshair_id], redraw=False)
+            self._canvas.delete_objects_by_tag([self._crosshair_id], redraw=False)
         except:
             pass
 
@@ -118,7 +118,7 @@ class GingaImageLayer(GingaLayerArtist, ImageLayerBase):
     def zorder(self, value):
         self._zorder = value
         try:
-            canvas_img = self._canvas.getObjectByTag('_image')
+            canvas_img = self._canvas.get_object_by_tag('_image')
             canvas_img.set_zorder(value)
         except KeyError:
             # object does not yet exist on canvas
@@ -142,7 +142,7 @@ class GingaImageLayer(GingaLayerArtist, ImageLayerBase):
     def clear(self):
         # remove previously added image
         try:
-            self._canvas.deleteObjectsByTag(['_image'], redraw=False)
+            self._canvas.delete_objects_by_tag(['_image'], redraw=False)
         except:
             pass
 
@@ -206,7 +206,7 @@ class GingaSubsetImageLayer(GingaLayerArtist, SubsetImageLayerBase):
     def zorder(self, value):
         self._zorder = value
         try:
-            canvas_img = self._canvas.getObjectByTag(self._tag)
+            canvas_img = self._canvas.get_object_by_tag(self._tag)
             canvas_img.set_zorder(value)
         except KeyError:
             # object does not yet exist on canvas
@@ -214,7 +214,7 @@ class GingaSubsetImageLayer(GingaLayerArtist, SubsetImageLayerBase):
 
     def clear(self):
         try:
-            self._canvas.deleteObjectsByTag([self._tag], redraw=True)
+            self._canvas.delete_objects_by_tag([self._tag], redraw=True)
         except:
             pass
 
@@ -230,7 +230,7 @@ class GingaSubsetImageLayer(GingaLayerArtist, SubsetImageLayerBase):
         if self._cimg is None:
             # SubsetImages can't be added to canvases directly. Need
             # to wrap into a ginga canvas type.
-            Image = self._canvas.getDrawClass('image')
+            Image = self._canvas.get_draw_class('image')
             self._cimg = Image(0, 0, self._img, alpha=0.5, flipy=False)
 
         self._img.view = view
@@ -255,7 +255,7 @@ class GingaSubsetImageLayer(GingaLayerArtist, SubsetImageLayerBase):
     def _ensure_added(self):
         """ Add artist to canvas if needed """
         try:
-            self._canvas.getObjectByTag(self._tag)
+            self._canvas.get_object_by_tag(self._tag)
         except KeyError:
             self._canvas.add(self._cimg, tag=self._tag, redraw=False)
 
@@ -418,9 +418,11 @@ class SubsetImage(BaseImage.BaseImage):
     def get_scaled_cutout_wdht(self, x1, y1, x2, y2, new_wd, new_ht):
         doit = getattr(self, '_doit', False)
         self._doit = not doit
+
         # default implementation if downsampling
         if doit or new_wd <= (x2 - x1 + 1) or new_ht <= (y2 - y1 + 1):
-            return super(SubsetImage, self).get_scaled_cutout_wdht(x1, y1, x2, y2, new_wd, new_ht)
+            return super(SubsetImage, self).get_scaled_cutout_wdht(x1, y1, x2, y2,
+                                                                   new_wd, new_ht)
 
         # if upsampling, prevent extra to_mask() computation
         x1, x2 = np.clip([x1, x2], 0, self.width - 2).astype(np.int)

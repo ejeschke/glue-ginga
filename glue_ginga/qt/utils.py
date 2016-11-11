@@ -34,13 +34,13 @@ def cmap2pixmap(cmap, steps=50):
 def ginga_graphic_to_roi(obj):
     if obj.kind == 'rectangle':
         roi = roimod.RectangularROI(xmin=obj.x1, xmax=obj.x2,
-                                    ymin=obj.y1, ymax=obj.y2)
+                                        ymin=obj.y1, ymax=obj.y2)
     elif obj.kind == 'circle':
         roi = roimod.CircularROI(xc=obj.x, yc=obj.y,
-                                 radius=obj.radius)
+                                     radius=obj.radius)
     elif obj.kind == 'polygon':
-        vx = map(lambda xy: xy[0], obj.points)
-        vy = map(lambda xy: xy[1], obj.points)
+        vx = list(map(lambda xy: xy[0], obj.points))
+        vy = list(map(lambda xy: xy[1], obj.points))
         roi = roimod.PolygonalROI(vx=vx, vy=vy)
 
     else:

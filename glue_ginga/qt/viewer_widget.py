@@ -1,26 +1,25 @@
 from __future__ import absolute_import, division, print_function
 
-from ginga.misc import log
-from ginga import toolkit
-try:
-    toolkit.use('qt')
-    from ginga.gw import ColorBar
-except ImportError:
-    # older versions of ginga
-    from ginga.qtw import ColorBar
-from ginga.qtw.ImageViewCanvasQt import ImageViewCanvas
+import sys
+import os
 
 from qtpy import QtWidgets
+
+from ginga.misc import log
+from ginga import toolkit
+toolkit.use('qt')
+from ginga.gw import ColorBar
+from ginga.gw import Readout
+from ginga.qtw.ImageViewCanvasQt import ImageViewCanvas
+from ginga.misc.Settings import SettingGroup
+from ginga.Bindings import ImageViewBindings
+from ginga.util.paths import ginga_home
 
 from glue.viewers.image.qt import ImageWidgetBase
 from glue.viewers.common.qt.toolbar import BasicToolbar
 from glue_ginga.qt.client import GingaClient
 from glue_ginga.qt.utils import ginga_graphic_to_roi
 
-try:
-    from ginga.gw import Readout
-except ImportError:  # older versions of ginga
-    from ginga.qtw import Readout
 
 __all__ = ['GingaWidget']
 
@@ -36,38 +35,46 @@ class GingaWidget(ImageWidgetBase):
 
     def __init__(self, session, parent=None):
 
-        self.logger = log.get_logger(name='ginga', level=20, null=True,
+        self.logger = log.get_logger(name='ginga', level=20,
                                      # uncomment for debugging
-                                     # log_stderr=True
+                                     null=True, log_stderr=False,
+                                     #null=False, log_stderr=True
                                      )
 
-        self.viewer = ImageViewCanvas(self.logger, render='widget')
+        # load binding preferences if available
+        cfgfile = os.path.join(ginga_home, "bindings.cfg")
+        bindprefs = SettingGroup(name='bindings', logger=self.logger,
+                                 preffile=cfgfile)
+        bindprefs.load(onError='silent')
+
+        bd = ImageViewBindings(self.logger, settings=bindprefs)
+
+        # make Ginga viewer
+        self.viewer = ImageViewCanvas(self.logger, render='widget',
+                                      bindings=bd)
         self.canvas = self.viewer
 
         # prevent widget from grabbing focus
-        try:
-            self.canvas.set_enter_focus(False)
-        except AttributeError:
-            self.canvas.set_follow_focus(False)
+        self.viewer.set_enter_focus(False)
 
         # enable interactive features
-        bindings = self.canvas.get_bindings()
+        bindings = self.viewer.get_bindings()
         bindings.enable_all(True)
         self.canvas.add_callback('none-move', self.motion_readout)
         self.canvas.add_callback('draw-event', self._apply_roi_cb)
         self.canvas.add_callback('draw-down', self._clear_roi_cb)
         self.canvas.enable_draw(False)
-        self.canvas.enable_autozoom('off')
-        self.canvas.set_zoom_algorithm('rate')
-        self.canvas.set_zoomrate(1.4)
+        self.viewer.enable_autozoom('off')
+        self.viewer.set_zoom_algorithm('rate')
+        self.viewer.set_zoomrate(1.4)
 
-        bm = self.canvas.get_bindmap()
+        bm = self.viewer.get_bindmap()
         bm.add_callback('mode-set', self.mode_set_cb)
         self.mode_w = None
         self.mode_actns = {}
 
         # Create settings and set defaults
-        settings = self.canvas.get_settings()
+        settings = self.viewer.get_settings()
         self.settings = settings
         settings.getSetting('cuts').add_callback('set', self.cut_levels_cb)
         settings.set(autozoom='off', autocuts='override',
@@ -131,7 +138,7 @@ class GingaWidget(ImageWidgetBase):
 
     def _clear_roi_cb(self, canvas, *args):
         try:
-            self.canvas.deleteObjectByTag(self.roi_tag)
+            self.canvas.delete_object_by_tag(self.roi_tag)
         except:
             pass
 
@@ -139,10 +146,10 @@ class GingaWidget(ImageWidgetBase):
         if self.canvas.draw_context is not self:
             return
         self.roi_tag = tag
-        obj = self.canvas.getObjectByTag(self.roi_tag)
+        obj = self.canvas.get_object_by_tag(self.roi_tag)
         roi = ginga_graphic_to_roi(obj)
         # delete outline
-        self.canvas.deleteObject(obj, redraw=False)
+        self.canvas.delete_object(obj, redraw=False)
         self.apply_roi(roi)
 
     def _tweak_geometry(self):

@@ -3,13 +3,19 @@ from __future__ import absolute_import, division, print_function
 import sys
 import os
 
-from qtpy import QtWidgets
+from qtpy import QtWidgets, PYQT5
 
 from ginga.misc import log
 from ginga import toolkit
-toolkit.use('qt')
+
+if PYQT5:
+    toolkit.use('qt5')
+else:
+    toolkit.use('qt')
+
 from ginga.gw import ColorBar
 from ginga.gw import Readout
+
 from ginga.qtw.ImageViewCanvasQt import ImageViewCanvas
 from ginga.misc.Settings import SettingGroup
 from ginga.Bindings import ImageViewBindings

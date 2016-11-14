@@ -20,11 +20,11 @@ from ginga.qtw.ImageViewCanvasQt import ImageViewCanvas
 from ginga.misc.Settings import SettingGroup
 from ginga.Bindings import ImageViewBindings
 from ginga.util.paths import ginga_home
+from ginga import colors
 
 from glue.viewers.image.qt import ImageWidgetBase
 from glue.viewers.common.qt.toolbar import BasicToolbar
 from glue_ginga.qt.client import GingaClient
-from glue_ginga.qt.utils import ginga_graphic_to_roi
 
 
 __all__ = ['GingaWidget']
@@ -35,9 +35,12 @@ class GingaWidget(ImageWidgetBase):
     LABEL = "Ginga Viewer"
 
     _toolbar_cls = BasicToolbar
-    tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:pan',
-             'ginga:freepan', 'ginga:rotate', 'ginga:contrast', 'ginga:cuts',
-             'ginga:colormap', 'ginga:slicer', 'ginga:spectrum']
+    tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:lasso',
+             'ginga:xrange', 'ginga:yrange',
+             'ginga:pan', 'ginga:freepan', 'ginga:rotate',
+             # uncomment dist tool after we update ginga and fix version
+             'ginga:contrast', 'ginga:cuts', #'ginga:dist',
+             'ginga:colormap', 'ginga:spectrum', 'ginga:slicer']
 
     def __init__(self, session, parent=None):
 
@@ -67,12 +70,16 @@ class GingaWidget(ImageWidgetBase):
         bindings = self.viewer.get_bindings()
         bindings.enable_all(True)
         self.canvas.add_callback('none-move', self.motion_readout)
+        self.canvas.register_for_cursor_drawing(self.viewer)
         self.canvas.add_callback('draw-event', self._apply_roi_cb)
+        self.canvas.add_callback('edit-event', self._update_roi_cb)
         self.canvas.add_callback('draw-down', self._clear_roi_cb)
         self.canvas.enable_draw(False)
+        self.canvas.enable_edit(False)
         self.viewer.enable_autozoom('off')
         self.viewer.set_zoom_algorithm('rate')
         self.viewer.set_zoomrate(1.4)
+        self.viewer.set_fg(*colors.lookup_color('green'))
 
         bm = self.viewer.get_bindmap()
         bm.add_callback('mode-set', self.mode_set_cb)
@@ -95,6 +102,7 @@ class GingaWidget(ImageWidgetBase):
         # make coordinates/value readout
         self.readout = Readout.Readout(-1, 20)
         self.roi_tag = None
+        self.opn_obj = None
 
         super(GingaWidget, self).__init__(session, parent)
 
@@ -134,29 +142,48 @@ class GingaWidget(ImageWidgetBase):
         (loval, hival) = tup
         self.colorbar.set_range(loval, hival)
 
-    def _set_roi_mode(self, name, tf):
-        self.canvas.enable_draw(True)
+    def _set_roi_mode(self, opn_obj, name, mode, **kwargs):
+        self.opn_obj = opn_obj
+        en_draw = (mode == 'draw')
+        self.canvas.enable_draw(en_draw)
+        self.canvas.set_draw_mode(mode)
         # XXX need better way of setting draw contexts
         self.canvas.draw_context = self
-        self.canvas.set_drawtype(name, color='cyan', linestyle='dash')
-        bm = self.viewer.get_bindmap()
-        bm.set_mode('draw', mode_type='locked')
+        self.canvas.set_drawtype(name, **kwargs)
+        ## bm = self.viewer.get_bindmap()
+        ## bm.set_mode('draw', mode_type='locked')
 
     def _clear_roi_cb(self, canvas, *args):
-        try:
-            self.canvas.delete_object_by_tag(self.roi_tag)
-        except:
-            pass
+        if self.opn_obj is not None:
+            self.opn_obj.opn_init(self, self.roi_tag)
+
+        else:
+            try:
+                self.canvas.delete_object_by_tag(self.roi_tag)
+            except:
+                pass
 
     def _apply_roi_cb(self, canvas, tag):
         if self.canvas.draw_context is not self:
             return
         self.roi_tag = tag
-        obj = self.canvas.get_object_by_tag(self.roi_tag)
-        roi = ginga_graphic_to_roi(obj)
-        # delete outline
-        self.canvas.delete_object(obj, redraw=False)
-        self.apply_roi(roi)
+        obj = self.canvas.get_object_by_tag(tag)
+
+        if self.opn_obj is None:
+            # delete outline
+            self.canvas.delete_object(obj)
+            self.roi_tag = None
+            return
+
+        self.opn_obj.opn_exec(self, tag, obj)
+
+    def _update_roi_cb(self, canvas, obj):
+        if self.canvas.draw_context is not self:
+            return
+        if self.opn_obj is None:
+            return
+
+        self.opn_obj.opn_update(self, obj)
 
     def _tweak_geometry(self):
         super(GingaWidget, self)._tweak_geometry()

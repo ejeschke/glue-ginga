@@ -33,15 +33,30 @@ def cmap2pixmap(cmap, steps=50):
 
 def ginga_graphic_to_roi(obj):
     if obj.kind == 'rectangle':
-        roi = roimod.RectangularROI(xmin=obj.x1, xmax=obj.x2,
-                                        ymin=obj.y1, ymax=obj.y2)
+        # make sure x2, y2 are the upper right corner
+        x1, y1, x2, y2 = obj.swapxy(obj.x1, obj.y1, obj.x2, obj.y2)
+        roi = roimod.RectangularROI(xmin=x1, xmax=x2, ymin=y1, ymax=y2)
     elif obj.kind == 'circle':
         roi = roimod.CircularROI(xc=obj.x, yc=obj.y,
                                      radius=obj.radius)
-    elif obj.kind == 'polygon':
-        vx = list(map(lambda xy: xy[0], obj.points))
-        vy = list(map(lambda xy: xy[1], obj.points))
+    elif obj.kind in ('polygon', 'freepolygon'):
+        vx, vy = zip(*obj.points)
         roi = roimod.PolygonalROI(vx=vx, vy=vy)
+
+    elif obj.kind in ('path', 'freepath', 'line'):
+        vx, vy = zip(*obj.points)
+        roi = roimod.Path(vx=vx, vy=vy)
+
+    elif obj.kind == 'xrange':
+        x1, y1, x2, y2 = obj.swapxy(obj.x1, 0, obj.x2, 0)
+        roi = roimod.XRangeROI(min=x1, max=x2)
+
+    elif obj.kind == 'yrange':
+        x1, y1, x2, y2 = obj.swapxy(0, obj.y1, 0, obj.y2)
+        roi = roimod.YRangeROI(min=y1, max=y2)
+
+    elif obj.kind == 'point':
+        roi = roimod.PointROI(x=obj.x, y=obj.y)
 
     else:
         raise Exception("Don't know how to convert shape '%s' to a ROI" % (

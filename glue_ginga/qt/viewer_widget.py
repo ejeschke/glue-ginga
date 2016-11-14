@@ -38,8 +38,7 @@ class GingaWidget(ImageWidgetBase):
     tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:lasso',
              'ginga:xrange', 'ginga:yrange',
              'ginga:pan', 'ginga:freepan', 'ginga:rotate',
-             # uncomment dist tool after we update ginga and fix version
-             'ginga:contrast', 'ginga:cuts', #'ginga:dist',
+             'ginga:contrast', 'ginga:cuts', 'ginga:dist',
              'ginga:colormap', 'ginga:spectrum', 'ginga:slicer']
 
     def __init__(self, session, parent=None):

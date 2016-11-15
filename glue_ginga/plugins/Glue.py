@@ -181,7 +181,8 @@ class Glue(GingaPlugin.GlobalPlugin):
             self.glue_hl.connect_hub(hub)
 
         # self.glue_app._create_terminal()
-        self.glue_app.resize(1200, 800)
+        sgeo = self.glue_app.app.desktop().screenGeometry()
+        self.glue_app.resize(sgeo.width() * 0.9, sgeo.height() * 0.9)
         self.glue_app.show()
         #self.glue_app.lower()
 
@@ -224,7 +225,7 @@ def qglue():
 
     dc = DataCollection()
 
-    ga = GlueApplication(dc)
+    ga = GlueApplication(data_collection=dc, maximized=False)
     return ga
 
 # END

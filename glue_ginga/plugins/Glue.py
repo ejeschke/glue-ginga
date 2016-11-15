@@ -100,7 +100,7 @@ class Glue(GingaPlugin.GlobalPlugin):
         fr = Widgets.Frame("Glue Interface")
 
         captions = [
-            ('Start Glue', 'button', 'Stop Glue', 'button'),
+            ('Start Glue', 'button'),
             ('Put Data', 'button'),
             ('Get Data', 'button', 'dataitem', 'combobox'),
             ]
@@ -112,8 +112,6 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         b.start_glue.add_callback('activated', lambda w: self.start_glue_cb())
         b.start_glue.set_tooltip('Start a Glue session')
-
-        b.stop_glue.add_callback('activated', lambda w: self.stop_glue_cb())
 
         b.put_data.add_callback('activated', lambda w: self.put_data_cb())
         b.put_data.set_tooltip('Send data to Glue')
@@ -146,13 +144,11 @@ class Glue(GingaPlugin.GlobalPlugin):
 
 Press "Start Glue" to start a new Glue session. Glue started independently (without using this button) does not work with this plugin. Glue started this way is tied to the Ginga session; i.e., closing Ginga will also close Glue.
 
-Press "Stop Glue" to end the existing Glue session. This might not work correctly if there are multiple Glue sessions. This is unnecessary if Glue is already closed, e.g., by pressing "X" in Glue.
-
 To send an image or table to Glue, make it the currently active image/table and press "Put Data". Then switch to the Glue application to interact with it. Currently, WCS information is not transferred.
 
 To get an image (table not yet supported) from Glue to the currently active channel, select the associated name from the drop-down menu and then press "Get Data". Currently, WCS information is not transferred. If there is already an image with the same name in the Ginga channel, it will be overwritten.
 
-Press "Close" to close this plugin. This also closes the associated Glue session.""")  # noqa
+Press "Close" to close this plugin. This also closes the associated Glue session, if not already. This might not close all Glue sessions if there are multiple open.""")  # noqa
 
     def put_data_cb(self):
         if self.glue_app is None:
@@ -185,7 +181,7 @@ Press "Close" to close this plugin. This also closes the associated Glue session
             self.fv.show_error("No glue session running!")
             return
 
-        #channel = self.fv.get_channel_on_demand('Glue')
+        # channel = self.fv.get_channel_on_demand('Glue')
         channel = self.fv.get_current_channel()
         if channel is None:
             self.fv.show_error("No active channel!")
@@ -224,7 +220,7 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         sgeo = self.glue_app.app.desktop().screenGeometry()
         self.glue_app.resize(sgeo.width() * 0.9, sgeo.height() * 0.9)
         self.glue_app.show()
-        #self.glue_app.lower()
+        # self.glue_app.lower()
 
     def stop_glue_cb(self):
         if self.glue_app is None:

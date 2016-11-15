@@ -8,6 +8,7 @@
 The Glue plugin implements a Glue interface for the Ginga viewer.
 """
 import sys
+import warnings
 
 from ginga import GingaPlugin
 from ginga import AstroImage
@@ -19,6 +20,7 @@ from ginga.util.six.moves import map
 from glue.core.message import (DataCollectionAddMessage,
                                DataCollectionDeleteMessage)
 from glue.core.hub import HubListener
+from glue.utils.error import GlueDeprecationWarning
 
 help_msg = sys.modules[__name__].__doc__
 
@@ -75,9 +77,25 @@ class Glue(GingaPlugin.GlobalPlugin):
         self.glue_hl.add_callback('data_out', self.data_removed_cb)
 
         self.data_names = []
+        self.gui_up = False
 
     def build_gui(self, container):
-        vbox = Widgets.VBox()
+        top = Widgets.VBox()
+        top.set_border_width(4)
+
+        vbox, sw, orientation = Widgets.get_oriented_box(container)
+
+        vbox.set_border_width(4)
+        vbox.set_spacing(2)
+
+        self.msg_font = self.fv.get_font("sansFont", 12)
+        tw = Widgets.TextArea(wrap=True, editable=False)
+        tw.set_font(self.msg_font)
+        self.tw = tw
+
+        fr = Widgets.Expander("Instructions")
+        fr.set_widget(tw)
+        vbox.add_widget(fr, stretch=0)
 
         fr = Widgets.Frame("Glue Interface")
 
@@ -93,14 +111,20 @@ class Glue(GingaPlugin.GlobalPlugin):
         vbox.add_widget(fr, stretch=0)
 
         b.start_glue.add_callback('activated', lambda w: self.start_glue_cb())
-        b.start_glue.set_tooltip("Start a Glue session")
+        b.start_glue.set_tooltip('Start a Glue session')
+
         b.stop_glue.add_callback('activated', lambda w: self.stop_glue_cb())
 
         b.put_data.add_callback('activated', lambda w: self.put_data_cb())
+        b.put_data.set_tooltip('Send data to Glue')
+
         b.get_data.add_callback('activated', lambda w: self.get_data_cb())
+        b.get_data.set_tooltip('Get selected data from Glue')
+
+        b.dataitem.set_tooltip('Select data to get from Glue')
 
         # stretch
-        vbox.add_widget(Widgets.Label(''), stretch=1)
+        top.add_widget(sw, stretch=1)
 
         btns = Widgets.HBox()
         btns.set_spacing(4)
@@ -108,11 +132,27 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         btn = Widgets.Button("Close")
         btn.add_callback('activated', lambda w: self.close())
+        btn.set_tooltip('Close this plugin and Glue')
         btns.add_widget(btn)
         btns.add_widget(Widgets.Label(''), stretch=1)
-        vbox.add_widget(btns)
 
-        container.add_widget(vbox, stretch=1)
+        top.add_widget(btns, stretch=0)
+        container.add_widget(top, stretch=1)
+
+        self.gui_up = True
+
+    def instructions(self):
+        self.tw.set_text("""This plugin enables interface with Glue.
+
+Press "Start Glue" to start a new Glue session. Glue started independently (without using this button) does not work with this plugin. Glue started this way is tied to the Ginga session; i.e., closing Ginga will also close Glue.
+
+Press "Stop Glue" to end the existing Glue session. This might not work correctly if there are multiple Glue sessions. This is unnecessary if Glue is already closed, e.g., by pressing "X" in Glue.
+
+To send an image or table to Glue, make it the currently active image/table and press "Put Data". Then switch to the Glue application to interact with it. Currently, WCS information is not transferred.
+
+To get an image (table not yet supported) from Glue to the currently active channel, select the associated name from the drop-down menu and then press "Get Data". Currently, WCS information is not transferred. If there is already an image with the same name in the Ginga channel, it will be overwritten.
+
+Press "Close" to close this plugin. This also closes the associated Glue session.""")  # noqa
 
     def put_data_cb(self):
         if self.glue_app is None:
@@ -196,9 +236,10 @@ class Glue(GingaPlugin.GlobalPlugin):
         print(dir(msg))
 
     def start(self):
-        pass
+        self.instructions()
 
     def stop(self):
+        self.gui_up = False
         self.stop_glue_cb()
 
     def close(self):
@@ -225,7 +266,11 @@ def qglue():
 
     dc = DataCollection()
 
-    ga = GlueApplication(data_collection=dc, maximized=False)
+    # Suppress pesky Glue warnings.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', GlueDeprecationWarning)
+        ga = GlueApplication(data_collection=dc, maximized=False)
+
     return ga
 
 # END

@@ -7,6 +7,8 @@
 """
 The Glue plugin implements a Glue interface for the Ginga viewer.
 """
+from __future__ import absolute_import, division, print_function
+
 import sys
 import warnings
 
@@ -18,11 +20,14 @@ from ginga.misc.Callback import Callbacks
 from ginga.util.six.moves import map
 
 from glue.core.message import (DataCollectionAddMessage,
-                               DataCollectionDeleteMessage)
+                               DataCollectionDeleteMessage,
+                               ApplicationClosedMessage)
 from glue.core.hub import HubListener
 from glue.utils.error import GlueDeprecationWarning
 
 help_msg = sys.modules[__name__].__doc__
+
+__all__ = ['Glue']
 
 
 class GingaHubListener(Callbacks, HubListener):
@@ -35,7 +40,7 @@ class GingaHubListener(Callbacks, HubListener):
 
         self.datasrc = datasrc
 
-        for cbname in ['data_in', 'data_out']:
+        for cbname in ['data_in', 'data_out', 'app_closed']:
             self.enable_callback(cbname)
 
     def connect_hub(self, hub):
@@ -43,6 +48,10 @@ class GingaHubListener(Callbacks, HubListener):
                       self._data_added_cb)
         hub.subscribe(self, DataCollectionDeleteMessage,
                       self._data_removed_cb)
+
+        # This needs https://github.com/glue-viz/glue/pull/1168
+        hub.subscribe(self, ApplicationClosedMessage,
+                      self._app_closed_cb)
 
     def _data_added_cb(self, msg):
         data = msg.data
@@ -60,6 +69,9 @@ class GingaHubListener(Callbacks, HubListener):
         image = self.datasrc.remove(name)
         self.make_callback('data_out', image)
 
+    def _app_closed_cb(self, msg):
+        self.make_callback('app_closed', None)
+
     def get_data(self, name):
         return self.datasrc[name]
 
@@ -75,6 +87,7 @@ class Glue(GingaPlugin.GlobalPlugin):
         self.glue_hl = GingaHubListener(Datasrc(length=0))
         self.glue_hl.add_callback('data_in', self.data_added_cb)
         self.glue_hl.add_callback('data_out', self.data_removed_cb)
+        self.glue_hl.add_callback('app_closed', self.app_closed_cb)
 
         self.data_names = []
         self.gui_up = False
@@ -115,9 +128,11 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         b.put_data.add_callback('activated', lambda w: self.put_data_cb())
         b.put_data.set_tooltip('Send data to Glue')
+        b.put_data.set_enabled(False)
 
         b.get_data.add_callback('activated', lambda w: self.get_data_cb())
         b.get_data.set_tooltip('Get selected data from Glue')
+        b.get_data.set_enabled(False)
 
         b.dataitem.set_tooltip('Select data to get from Glue')
 
@@ -150,9 +165,17 @@ To get an image (table not yet supported) from Glue to the currently active chan
 
 Press "Close" to close this plugin. This also closes the associated Glue session, if not already. This might not close all Glue sessions if there are multiple open.""")  # noqa
 
+    def error_no_glue(self, verbose=True):
+        """Call this to reset GUI when Glue session disappears."""
+        self.w.start_glue.set_enabled(True)
+        self.w.put_data.set_enabled(False)
+        self.w.get_data.set_enabled(False)
+        if verbose:
+            self.fv.show_error("No glue session running!")
+
     def put_data_cb(self):
         if self.glue_app is None:
-            self.fv.show_error("No glue session running!")
+            self.error_no_glue()
             return
 
         channel = self.fv.get_current_channel()
@@ -175,10 +198,11 @@ Press "Close" to close this plugin. This also closes the associated Glue session
 
         except Exception as e:
             self.fv.show_error("Error sending data to Glue: %s" % (str(e)))
+            self.error_no_glue()
 
     def get_data_cb(self):
         if self.glue_app is None:
-            self.fv.show_error("No glue session running!")
+            self.error_no_glue()
             return
 
         # channel = self.fv.get_channel_on_demand('Glue')
@@ -210,6 +234,10 @@ Press "Close" to close this plugin. This also closes the associated Glue session
     def data_removed_cb(self, hub, dataobj):
         self._adj_data_list()
 
+    def app_closed_cb(self, hub, dataobj):
+        self.glue_app = None
+        self.error_no_glue(verbose=False)
+
     def start_glue_cb(self):
         self.glue_app = qglue()
         hub = self.glue_app.data_collection.hub
@@ -222,11 +250,20 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         self.glue_app.show()
         # self.glue_app.lower()
 
+        # Toggle buttons accordingly.
+        self.w.start_glue.set_enabled(False)
+        self.w.put_data.set_enabled(True)
+        self.w.get_data.set_enabled(True)
+
     def stop_glue_cb(self):
         if self.glue_app is None:
+            self.error_no_glue(verbose=False)
             return
         w, self.glue_app = self.glue_app, None
-        w.deleteLater()
+        try:
+            w.deleteLater()
+        except Exception as e:  # Glue is closed already
+            self.logger.debug(str(e))
 
     def glue_new_data_cb(self, msg):
         print(dir(msg))

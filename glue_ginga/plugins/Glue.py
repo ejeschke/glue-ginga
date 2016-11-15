@@ -12,11 +12,14 @@ from __future__ import absolute_import, division, print_function
 import sys
 import warnings
 
+from astropy.table import Table
+
 from ginga import GingaPlugin
 from ginga import AstroImage
 from ginga.gw import Widgets
 from ginga.misc.Datasrc import Datasrc
 from ginga.misc.Callback import Callbacks
+from ginga.table import AstroTable
 from ginga.util.six.moves import map
 
 from glue.core.message import (DataCollectionAddMessage,
@@ -56,9 +59,10 @@ class GingaHubListener(Callbacks, HubListener):
     def _data_added_cb(self, msg):
         data = msg.data
         name = data.label
-        ids = data.component_ids()
-        data_np = data[ids[0]]
-        image = AstroImage.AstroImage(data_np=data_np)
+        if data.ndim == 1:
+            image = self._data_to_table(data)
+        else:
+            image = self._data_to_image(data)
         image.set(name=name)
         self.datasrc[name] = image
         self.make_callback('data_in', image)
@@ -74,6 +78,28 @@ class GingaHubListener(Callbacks, HubListener):
 
     def get_data(self, name):
         return self.datasrc[name]
+
+    @staticmethod
+    def _data_to_image(data):
+        ids = data.component_ids()
+        data_np = data[ids[0]]
+        image = AstroImage.AstroImage(data_np=data_np)
+        if hasattr(data.coords, 'wcs'):
+            image.wcs.load_header(data.coords.wcs.to_header())
+        return image
+
+    @staticmethod
+    def _data_to_table(data):
+        tab = Table()
+
+        for cid in data.visible_components:
+            comp = data.get_component(cid)
+            if comp.categorical:
+                tab[cid.label] = comp.labels
+            else:
+                tab[cid.label] = comp.data
+
+        return AstroTable.AstroTable(data_ap=tab)
 
 
 class Glue(GingaPlugin.GlobalPlugin):
@@ -161,9 +187,9 @@ Press "Start Glue" to start a new Glue session. Glue started independently (with
 
 To send an image or table to Glue, make it the currently active image/table and press "Put Data". Then switch to the Glue application to interact with it. Currently, WCS information is not transferred.
 
-To get an image (table not yet supported) from Glue to the currently active channel, select the associated name from the drop-down menu and then press "Get Data". Currently, WCS information is not transferred. If there is already an image with the same name in the Ginga channel, it will be overwritten.
+To get an image or table from Glue to the currently active channel, select the associated name from the drop-down menu and then press "Get Data". If there is already an image with the same name in the Ginga channel, it will be overwritten.
 
-Press "Close" to close this plugin. This also closes the associated Glue session, if not already. This might not close all Glue sessions if there are multiple open.""")  # noqa
+Press "Close" to close this plugin. This also closes the associated Glue session, if not already.""")  # noqa
 
     def error_no_glue(self, verbose=True):
         """Call this to reset GUI when Glue session disappears."""
@@ -193,6 +219,10 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         kwargs = {name: data_np}
 
         try:
+            # TODO: Pass in WCS for image.
+            #if isinstance(image, AstroImage.AstroImage):
+            #    ???.coords.wcs = image.wcs???
+
             self.glue_app.add_data(**kwargs)
             self.glue_app.raise_()
 

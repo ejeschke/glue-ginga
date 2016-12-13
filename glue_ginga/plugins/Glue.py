@@ -13,6 +13,7 @@ import sys
 import warnings
 
 from astropy.table import Table
+from astropy.wcs import WCS
 
 from ginga import GingaPlugin
 from ginga import AstroImage
@@ -22,6 +23,8 @@ from ginga.misc.Callback import Callbacks
 from ginga.table import AstroTable
 from ginga.util.six.moves import map
 
+from glue.core import Data
+from glue.core.coordinates import WCSCoordinates
 from glue.core.message import (DataCollectionAddMessage,
                                DataCollectionDeleteMessage,
                                ApplicationClosedMessage)
@@ -83,9 +86,18 @@ class GingaHubListener(Callbacks, HubListener):
     def _data_to_image(data):
         ids = data.component_ids()
         data_np = data[ids[0]]
-        image = AstroImage.AstroImage(data_np=data_np)
+        data_meta = {}
+
+        if hasattr(data.coords, 'header'):
+            h = AstroImage.AstroHeader()
+            h.update(data.coords.header)
+            data_meta['header'] = h
+
+        image = AstroImage.AstroImage(data_np=data_np, metadata=data_meta)
+
         if hasattr(data.coords, 'wcs'):
             image.wcs.load_header(data.coords.wcs.to_header())
+
         return image
 
     @staticmethod
@@ -185,7 +197,7 @@ class Glue(GingaPlugin.GlobalPlugin):
 
 Press "Start Glue" to start a new Glue session. Glue started independently (without using this button) does not work with this plugin. Glue started this way is tied to the Ginga session; i.e., closing Ginga will also close Glue.
 
-To send an image or table to Glue, make it the currently active image/table and press "Put Data". Then switch to the Glue application to interact with it. Currently, WCS information is not transferred.
+To send an image or table to Glue, make it the currently active image/table and press "Put Data". Then switch to the Glue application to interact with it.
 
 To get an image or table from Glue to the currently active channel, select the associated name from the drop-down menu and then press "Get Data". If there is already an image with the same name in the Ginga channel, it will be overwritten.
 
@@ -219,11 +231,15 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         kwargs = {name: data_np}
 
         try:
-            # TODO: Pass in WCS for image.
-            #if isinstance(image, AstroImage.AstroImage):
-            #    ???.coords.wcs = image.wcs???
+            gdata = Data(**kwargs)
 
-            self.glue_app.add_data(**kwargs)
+            # Pass in WCS for image.
+            if isinstance(image, AstroImage.AstroImage):
+                h = image.get_header()
+                w = WCS(h)
+                gdata.coords = WCSCoordinates(h, wcs=w)
+
+            self.glue_app.add_data(**{name: gdata})
             self.glue_app.raise_()
 
         except Exception as e:

@@ -14,12 +14,8 @@ entry_points = """
 ginga=glue_ginga:setup
 """
 
-try:
-    import pypandoc
-    LONG_DESCRIPTION = pypandoc.convert('README.md', 'rst')
-except (IOError, ImportError):
-    with open('README.md') as infile:
-        LONG_DESCRIPTION = infile.read()
+with open('README.rst') as infile:
+    LONG_DESCRIPTION = infile.read()
 
 
 def _decode_stdio(stream):

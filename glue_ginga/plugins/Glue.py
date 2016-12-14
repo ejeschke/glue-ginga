@@ -240,15 +240,17 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         kwargs = {name: data_np}
 
         try:
-            gdata = Data(**kwargs)
-
             # Pass in WCS for image.
             if isinstance(image, AstroImage.AstroImage):
+                gdata = Data(**kwargs)
                 h = image.get_header()
                 w = WCS(h)
                 gdata.coords = WCSCoordinates(h, wcs=w)
+                self.glue_app.add_data(**{name: gdata})
+            # Table data
+            else:
+                self.glue_app.add_data(**kwargs)
 
-            self.glue_app.add_data(**{name: gdata})
             self.glue_app.raise_()
 
         except Exception as e:

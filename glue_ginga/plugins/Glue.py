@@ -151,7 +151,7 @@ class Glue(GingaPlugin.GlobalPlugin):
         fr = Widgets.Frame("Glue Interface")
 
         captions = [
-            ('Start Glue', 'button'),
+            ('Start Glue', 'button', 'Stop Glue', 'button'),
             ('Put Data', 'button'),
             ('Get Data', 'button', 'dataitem', 'combobox'),
             ]
@@ -163,6 +163,10 @@ class Glue(GingaPlugin.GlobalPlugin):
 
         b.start_glue.add_callback('activated', lambda w: self.start_glue_cb())
         b.start_glue.set_tooltip('Start a Glue session')
+
+        b.stop_glue.add_callback('activated', lambda w: self.stop_glue_cb())
+        b.stop_glue.set_tooltip('Stop a Glue session')
+        b.stop_glue.set_enabled(False)
 
         b.put_data.add_callback('activated', lambda w: self.put_data_cb())
         b.put_data.set_tooltip('Send data to Glue')
@@ -197,6 +201,8 @@ class Glue(GingaPlugin.GlobalPlugin):
 
 Press "Start Glue" to start a new Glue session. Glue started independently (without using this button) does not work with this plugin. Glue started this way is tied to the Ginga session; i.e., closing Ginga will also close Glue.
 
+Press "Stop Glue" to end the Glue session without closing the plugin. This might not work correctly if there are multiple Glue sessions. This is unnecessary if Glue is already closed, e.g., by pressing "X" in Glue.
+
 To send an image or table to Glue, make it the currently active image/table and press "Put Data". Then switch to the Glue application to interact with it.
 
 To get an image or table from Glue to the currently active channel, select the associated name from the drop-down menu and then press "Get Data". If there is already an image with the same name in the Ginga channel, it will be overwritten.
@@ -206,8 +212,11 @@ Press "Close" to close this plugin. This also closes the associated Glue session
     def error_no_glue(self, verbose=True):
         """Call this to reset GUI when Glue session disappears."""
         self.w.start_glue.set_enabled(True)
+        self.w.stop_glue.set_enabled(False)
         self.w.put_data.set_enabled(False)
         self.w.get_data.set_enabled(False)
+        self.w.dataitem.clear()
+        self.data_names = []
         if verbose:
             self.fv.show_error("No glue session running!")
 
@@ -269,10 +278,16 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         self.w.dataitem.clear()
 
         self.data_names = list(map(lambda data: data.label, dc.data))
+
+        if len(self.data_names) == 0:
+            self.w.get_data.set_enabled(False)
+            return
+
         for name in self.data_names:
             self.w.dataitem.append_text(name)
 
         self.w.dataitem.set_index(0)
+        self.w.get_data.set_enabled(True)
 
     def data_added_cb(self, hub, dataobj):
         self._adj_data_list()
@@ -298,18 +313,22 @@ Press "Close" to close this plugin. This also closes the associated Glue session
 
         # Toggle buttons accordingly.
         self.w.start_glue.set_enabled(False)
+        self.w.stop_glue.set_enabled(True)
         self.w.put_data.set_enabled(True)
-        self.w.get_data.set_enabled(True)
 
     def stop_glue_cb(self):
         if self.glue_app is None:
             self.error_no_glue(verbose=False)
             return
+
         w, self.glue_app = self.glue_app, None
+
         try:
             w.deleteLater()
         except Exception as e:  # Glue is closed already
             self.logger.debug(str(e))
+        finally:
+            self.error_no_glue(verbose=False)
 
     def glue_new_data_cb(self, msg):
         print(dir(msg))
@@ -317,9 +336,15 @@ Press "Close" to close this plugin. This also closes the associated Glue session
     def start(self):
         self.instructions()
 
+        if self.glue_app is not None:
+            self.w.start_glue.set_enabled(False)
+            self.w.stop_glue.set_enabled(True)
+            self.w.put_data.set_enabled(True)
+            self._adj_data_list()
+
     def stop(self):
         self.gui_up = False
-        self.stop_glue_cb()
+        # self.stop_glue_cb()  # Uncomment this to close Glue when plugin close
 
     def close(self):
         self.w.dataitem.clear()

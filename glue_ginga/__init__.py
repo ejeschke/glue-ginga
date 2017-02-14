@@ -1,3 +1,5 @@
+from .version import __version__
+
 def setup():
     from .qt import mouse_modes
     try:

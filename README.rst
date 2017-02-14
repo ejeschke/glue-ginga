@@ -24,11 +24,11 @@ Features
 Installation
 ------------
 
-From source::
+Installing from source::
 
     python setup.py install
 
-From ``pip``::
+Installing with ``pip``::
 
     pip install git+https://github.com/ejeschke/glue-ginga
 

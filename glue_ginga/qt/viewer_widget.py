@@ -44,7 +44,7 @@ class GingaWidget(ImageWidgetBase):
     def __init__(self, session, parent=None):
 
         self.logger = log.get_logger(name='ginga', level=20,
-                                     # uncomment for debugging
+                                     # switch commenting for debugging
                                      null=True, log_stderr=False,
                                      #null=False, log_stderr=True
                                      )
@@ -64,6 +64,7 @@ class GingaWidget(ImageWidgetBase):
 
         # prevent widget from grabbing focus
         self.viewer.set_enter_focus(False)
+        self.viewer.set_desired_size(300, 300)
 
         # enable interactive features
         bindings = self.viewer.get_bindings()
@@ -78,7 +79,7 @@ class GingaWidget(ImageWidgetBase):
         self.viewer.enable_autozoom('off')
         self.viewer.set_zoom_algorithm('rate')
         self.viewer.set_zoomrate(1.4)
-        self.viewer.set_fg(*colors.lookup_color('green'))
+        self.viewer.set_fg(*colors.lookup_color("#D0F0E0"))
 
         bm = self.viewer.get_bindmap()
         bm.add_callback('mode-set', self.mode_set_cb)

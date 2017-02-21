@@ -362,11 +362,14 @@ class SubsetImage(BaseImage.BaseImage):
         kwargs : dict
             Extra kwargs are passed to the ginga superclass
         """
-        super(SubsetImage, self).__init__(**kwargs)
         self.subset = subset
         self.view = view
         self.transpose = transpose
         self.color = color
+
+        # NOTE: BaseImage accesses shape property--we need above items
+        # defined because we override shape()
+        super(SubsetImage, self).__init__(**kwargs)
         self.order = 'RGBA'
 
     @property
@@ -391,6 +394,11 @@ class SubsetImage(BaseImage.BaseImage):
 
     def _get_fast_data(self):
         return self._slice((slice(None, None, 10), slice(None, None, 10)))
+
+    def _calc_order(self, order):
+        # Override base class because it invokes a glue forbidden method to
+        # access the data type of the image--we can instead assume RGBA
+        self.order = 'RGBA'
 
     def _slice(self, view):
         """

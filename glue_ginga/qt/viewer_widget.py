@@ -21,7 +21,7 @@ from ginga.Bindings import ImageViewBindings
 from ginga.util.paths import ginga_home
 from ginga import colors
 
-from glue.viewers.matplotlib.qt.data_viewer import BaseDataViewerWithState
+from glue.viewers.common.qt.data_viewer_with_state import DataViewerWithState
 from glue.viewers.common.qt.toolbar import BasicToolbar
 from glue.viewers.image.state import ImageViewerState
 from glue.viewers.image.qt.options_widget import ImageOptionsWidget
@@ -36,7 +36,7 @@ from glue_ginga.qt.layer_artist import GingaImageLayer, GingaSubsetImageLayer
 __all__ = ['GingaViewer']
 
 
-class GingaViewer(BaseDataViewerWithState):
+class GingaViewer(DataViewerWithState):
 
     LABEL = "Ginga Viewer"
 

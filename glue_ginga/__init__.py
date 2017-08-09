@@ -9,6 +9,6 @@ def setup():
         raise ImportError("ginga is required")
 
     from .qt import mouse_modes  # noqa
-    from .qt.viewer_widget import GingaWidget
+    from .qt.viewer_widget import GingaViewer
     from glue.config import qt_client
-    qt_client.add(GingaWidget)
+    qt_client.add(GingaViewer)

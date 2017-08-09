@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 from time import time
 
 import numpy as np
@@ -8,263 +7,162 @@ from ginga.misc import Bunch
 from ginga.util import wcsmod
 from ginga import AstroImage, BaseImage
 
-from glue.core.util import split_component_view
+from glue.external.echo import keep_in_sync, CallbackProperty
 from glue.core.exceptions import IncompatibleAttribute
 from glue.core.layer_artist import LayerArtistBase
-from glue.utils import view_shape, stack_view, color2rgb, Pointer
-
-from glue.viewers.image.client import ImageClient
-from glue.viewers.image.layer_artist import ImageLayerBase, SubsetImageLayerBase
+from glue.utils import color2rgb
+from glue.viewers.image.state import ImageLayerState, ImageSubsetLayerState
 
 wcsmod.use('astropy')
 
 
-class GingaClient(ImageClient):
-
-    def __init__(self, data, canvas=None, layer_artist_container=None):
-        super(GingaClient, self).__init__(data, layer_artist_container)
-        self._setup_ginga(canvas)
-
-    def _setup_ginga(self, canvas):
-
-        if canvas is None:
-            raise ValueError("GingaClient needs a canvas")
-
-        self._canvas = canvas
-        self._wcs = None
-        self._crosshair_id = '_crosshair'
-
-    def _new_rgb_layer(self, layer):
-        raise NotImplementedError()
-
-    def _new_subset_image_layer(self, layer):
-        return GingaSubsetImageLayer(layer, self._canvas)
-
-    def _new_image_layer(self, layer):
-        return GingaImageLayer(layer, self._canvas)
-
-    def _new_scatter_layer(self, layer):
-        raise NotImplementedError()
-
-    def _update_axis_labels(self):
-        pass
-
-    def _update_and_redraw(self):
-        pass
-
-    def set_cmap(self, cmap):
-        self._canvas.set_cmap(cmap)
-
-    def show_crosshairs(self, x, y):
-        self.clear_crosshairs()
-        c = self._canvas.viewer.get_draw_class('point')(x, y, 6, color='red',
-                                                      style='plus')
-        self._canvas.add(c, tag=self._crosshair_id, redraw=True)
-
-    def clear_crosshairs(self):
-        try:
-            self._canvas.delete_objects_by_tag([self._crosshair_id], redraw=False)
-        except:
-            pass
-
-
 class GingaLayerArtist(LayerArtistBase):
 
-    zorder = Pointer('_zorder')
-    visible = Pointer('_visible')
+    zorder = CallbackProperty()
+    visible = CallbackProperty()
 
-    def __init__(self, layer, canvas):
+    def __init__(self, viewer_state=None, layer=None, layer_state=None, canvas=None):
+
         super(GingaLayerArtist, self).__init__(layer)
+
         self._canvas = canvas
-        self._visible = True
+
+        self.layer = layer or layer_state.layer
+        self.state = layer_state or self._layer_state_cls(viewer_state=viewer_state,
+                                                          layer=self.layer)
+
+        self._viewer_state = viewer_state
+
+        # Should not be needed here? (i.e. should be in add_data/add_subset?)
+        if self.state not in self._viewer_state.layers:
+            self._viewer_state.layers.append(self.state)
+
+        self.zorder = self.state.zorder
+        self.visible = self.state.visible
+
+        self._sync_zorder = keep_in_sync(self, 'zorder', self.state, 'zorder')
+        self._sync_visible = keep_in_sync(self, 'visible', self.state, 'visible')
+
+        self.state.add_callback('zorder', self._zorder_changed)
+
+    def _zorder_changed(self, *args):
+        try:
+            canvas_img = self._canvas.get_object_by_tag(self._tag)
+        except KeyError:
+            pass
+        else:
+            canvas_img.set_zorder(self.state.zorder)
+
+    def clear(self):
+        self._canvas.delete_objects_by_tag([self._tag], redraw=True)
 
     def redraw(self, whence=0):
         self._canvas.redraw(whence=whence)
 
+    def remove(self):
+        self.clear()
 
-class GingaImageLayer(GingaLayerArtist, ImageLayerBase):
+    def __gluestate__(self, context):
+        return dict(state=context.id(self.state))
 
-    # unused by Ginga
-    cmap = None
-    norm = None
 
-    def __init__(self, layer, canvas):
-        super(GingaImageLayer, self).__init__(layer, canvas)
-        self._override_image = None
-        self._tag = "layer%s_%s" % (layer.label, time())
-        self._img = None  # DataImage instance
-        self._enabled = True
+class GingaImageLayer(GingaLayerArtist):
 
-    @property
-    def visible(self):
-        return self._visible
+    _layer_state_cls = ImageLayerState
 
-    @visible.setter
-    def visible(self, value):
-        if self._visible == value:
-            return
+    def __init__(self, viewer_state=None, layer=None, layer_state=None, canvas=None):
 
-        self._visible = value
-        if not value:
+        super(GingaImageLayer, self).__init__(viewer_state=viewer_state, layer=layer,
+                                              layer_state=layer_state, canvas=canvas)
+
+        self._tag = '_image'
+        self._img = DataImage(self.state)
+
+        self.state.add_callback('visible', self._visible_changed)
+
+    def _visible_changed(self, *args):
+        if self.state.visible and self._img:
+            self._canvas.set_image(self._img)
+        elif not self.state.visible:
             self.clear()
-        elif self._img:
+
+    def _ensure_added(self):
+        """
+        Add artist to canvas if needed
+        """
+        try:
+            self._canvas.get_object_by_tag(self._tag)
+        except KeyError:
             self._canvas.set_image(self._img)
 
-    @property
-    def zorder(self):
-        return self._zorder
+    def update(self):
 
-    @zorder.setter
-    def zorder(self, value):
-        self._zorder = value
-        try:
-            canvas_img = self._canvas.get_object_by_tag('_image')
-            canvas_img.set_zorder(value)
-        except KeyError:
-            # object does not yet exist on canvas
-            pass
+        self._ensure_added()
 
-    def set_norm(self, **kwargs):
-        # NOP for ginga
-        pass
-
-    def clear_norm(self):
-        # NOP for ginga
-        pass
-
-    def override_image(self, image):
-        """Temporarily show a different image"""
-        self._override_image = image
-
-    def clear_override(self):
-        self._override_image = None
-
-    def clear(self):
-        # remove previously added image
-        try:
-            self._canvas.delete_objects_by_tag(['_image'], redraw=False)
-        except:
-            pass
-
-    @property
-    def enabled(self):
-        return self._enabled
-
-    def update(self, view, transpose=False):
         if not self.visible:
             return
-
-        # update ginga model
-        comp, view = split_component_view(view)
-
-        if self._img is None:
-            self._img = DataImage(self.layer, comp, view, transpose)
-            self._canvas.set_image(self._img)
-
-        self._img.data = self.layer
-        self._img.component = comp
-        self._img.view = view
-        self._img.transpose = transpose
-        self._img.override_image = self._override_image
 
         self.redraw()
 
 
-class GingaSubsetImageLayer(GingaLayerArtist, SubsetImageLayerBase):
+class GingaSubsetImageLayer(GingaLayerArtist):
 
-    def __init__(self, layer, canvas):
-        super(GingaSubsetImageLayer, self).__init__(layer, canvas)
-        self._img = None
-        self._cimg = None
+    _layer_state_cls = ImageSubsetLayerState
+
+    def __init__(self, viewer_state=None, layer=None, layer_state=None, canvas=None):
+
+        super(GingaSubsetImageLayer, self).__init__(viewer_state=viewer_state, layer=layer,
+                                                    layer_state=layer_state, canvas=canvas)
+
         self._tag = "layer%s_%s" % (layer.label, time())
-        self._enabled = True
 
-    @property
-    def visible(self):
-        return self._visible
+        self._img = SubsetImage(self.state)
 
-    @property
-    def enabled(self):
-        return self._enabled
+        # SubsetImages can't be added to canvases directly. Need
+        # to wrap into a ginga canvas type.
+        Image = self._canvas.get_draw_class('image')
+        self._cimg = Image(0, 0, self._img, alpha=0.5, flipy=False)
 
-    @visible.setter
-    def visible(self, value):
-        if value is self._visible:
-            return
+        # self.state.add_global_callback(self._update)
 
-        self._visible = value
-        if not value:
-            self.clear()
-        elif self._cimg:
+        self.state.add_callback('zorder', self._zorder_changed)
+        self.state.add_callback('visible', self._visible_changed)
+
+    def _visible_changed(self, *args):
+        if self.state.visible and self._cimg:
             self._canvas.add(self._cimg, tag=self._tag, redraw=True)
-
-    @property
-    def zorder(self):
-        return self._zorder
-
-    @zorder.setter
-    def zorder(self, value):
-        self._zorder = value
-        try:
-            canvas_img = self._canvas.get_object_by_tag(self._tag)
-            canvas_img.set_zorder(value)
-        except KeyError:
-            # object does not yet exist on canvas
-            pass
-
-    def clear(self):
-        try:
-            self._canvas.delete_objects_by_tag([self._tag], redraw=True)
-        except:
-            pass
-
-    def _update_ginga_models(self, view, transpose=False):
-        subset = self.layer
-        logging.getLogger(__name__).debug("View into subset %s is %s", self.layer, view)
-
-        _, view = split_component_view(view)  # discard ComponentID
-        r, g, b = color2rgb(self.layer.style.color)
-
-        if self._img is None:
-            self._img = SubsetImage(subset, view)
-        if self._cimg is None:
-            # SubsetImages can't be added to canvases directly. Need
-            # to wrap into a ginga canvas type.
-            Image = self._canvas.get_draw_class('image')
-            self._cimg = Image(0, 0, self._img, alpha=0.5, flipy=False)
-
-        self._img.view = view
-        self._img.color = (r, g, b)
-        self._img.transpose = transpose
+        elif not self.state.visible:
+            self.clear()
 
     def _check_enabled(self):
         """
         Sync the enabled/disabled status, based on whether
         mask is computable
         """
-        self._enabled = True
         try:
-            # the first pixel
+            # Just try computing the subset for the first pixel
             view = tuple(0 for _ in self.layer.data.shape)
             self.layer.to_mask(view)
         except IncompatibleAttribute as exc:
-            self._enabled = False
             self.disable_invalid_attributes(*exc.args)
-        return self._enabled
+            return
+
+        self.enable()
 
     def _ensure_added(self):
-        """ Add artist to canvas if needed """
+        """
+        Add artist to canvas if needed
+        """
         try:
             self._canvas.get_object_by_tag(self._tag)
         except KeyError:
             self._canvas.add(self._cimg, tag=self._tag, redraw=False)
 
-    def update(self, view, transpose=False):
+    def update(self):
 
         self._check_enabled()
-        self._update_ginga_models(view, transpose)
 
-        if self._enabled and self._visible:
+        if self.enabled and self.visible:
             self._ensure_added()
         else:
             self.clear()
@@ -277,37 +175,21 @@ def forbidden(*args):
 
 
 class DataImage(AstroImage.AstroImage):
-
     """
     A Ginga image subclass to interface with Glue Data objects
     """
+
     get_data = _get_data = copy_data = set_data = get_array = transfer = forbidden
 
-    def __init__(self, data, component, view, transpose=False,
-                 override_image=None, **kwargs):
+    def __init__(self, layer_state, **kwargs):
         """
         Parameters
         ----------
-        data : glue.core.data.Data
-            The data to image
-        component : glue.core.data.ComponentID
-            The ComponentID in the data to image
-        view : numpy-style view
-            The view into the data to image. Must produce a 2D array
-        transpose : bool
-            Whether to transpose the view
-        override_image : numpy array, optional
-            Whether to show override_image instead of the view into the data.
-            The override image must have the same shape as the 2D view into
-            the data.
+        ...
         kwargs : dict
             Extra kwargs are passed to the superclass
         """
-        self.transpose = transpose
-        self.view = view
-        self.data = data
-        self.component = component
-        self.override_image = None
+        self.layer_state = layer_state
         super(DataImage, self).__init__(**kwargs)
 
     @property
@@ -315,10 +197,7 @@ class DataImage(AstroImage.AstroImage):
         """
         The shape of the 2D view into the data
         """
-        result = view_shape(self.data.shape, self.view)
-        if self.transpose:
-            result = result[::-1]
-        return result
+        return self.layer_state.get_sliced_data_shape()
 
     def _get_fast_data(self):
         return self._slice((slice(None, None, 10), slice(None, None, 10)))
@@ -327,45 +206,24 @@ class DataImage(AstroImage.AstroImage):
         """
         Extract a view from the 2D image.
         """
-        if self.override_image is not None:
-            return self.override_image[view]
-
-        # Combining multiple views: First a 2D slice into an ND array, then
-        # the requested view from this slice
-        if self.transpose:
-            views = [self.view, 'transpose', view]
-        else:
-            views = [self.view, view]
-        view = stack_view(self.data.shape, *views)
-        return self.data[self.component, view]
+        return self.layer_state.get_sliced_data(view=view)
 
 
 class SubsetImage(BaseImage.BaseImage):
-
     """
     A Ginga image subclass to interface with Glue subset objects
     """
     get_data = _get_data = copy_data = set_data = get_array = transfer = forbidden
 
-    def __init__(self, subset, view, color=(0, 1, 0), transpose=False, **kwargs):
+    def __init__(self, layer_state=None, **kwargs):
         """
         Parameters
         ----------
-        subset : glue.core.subset.Subset
-            The subset to image
-        view : numpy-style view
-            The view into the subset to image. Must produce a 2D array
-        color : tuple of 3 floats in range [0, 1]
-            The color to image the subset as
-        transpose : bool
-            Whether to transpose the view
+        ...
         kwargs : dict
             Extra kwargs are passed to the ginga superclass
         """
-        self.subset = subset
-        self.view = view
-        self.transpose = transpose
-        self.color = color
+        self.layer_state = layer_state
 
         # NOTE: BaseImage accesses shape property--we need above items
         # defined because we override shape()
@@ -377,16 +235,13 @@ class SubsetImage(BaseImage.BaseImage):
         """
         Shape of the 2D view into the subset mask
         """
-        result = view_shape(self.subset.data.shape, self.view)
-        if self.transpose:
-            result = result[::-1]
-        return tuple(list(result) + [4])  # 4th dim is RGBA channels
+        return self.layer_state.get_sliced_data_shape()
 
     def _rgb_from_mask(self, mask):
         """
         Turn a boolean mask into a 4-channel RGBA image
         """
-        r, g, b = self.color
+        r, g, b = self.layer_state.color
         ones = mask * 0 + 255
         alpha = mask * 127
         result = np.dstack((ones * r, ones * g, ones * b, alpha)).astype(np.uint8)
@@ -404,17 +259,7 @@ class SubsetImage(BaseImage.BaseImage):
         """
         Extract a view from the 2D subset mask.
         """
-        # Combining multiple views: First a 2D slice into an ND array, then
-        # the requested view from this slice
-
-        if self.transpose:
-            views = [self.view, 'transpose', view]
-        else:
-            views = [self.view, view]
-        view = stack_view(self.subset.data.shape, *views)
-
-        mask = self.subset.to_mask(view)
-        return self._rgb_from_mask(mask)
+        return self.layer_state.get_sliced_data(view=view)
 
     def _set_minmax(self):
         # we already know the data bounds

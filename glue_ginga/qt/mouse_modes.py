@@ -7,12 +7,11 @@ from ginga import cmap as ginga_cmap
 
 from qtpy import QtGui, QtWidgets
 from glue.config import viewer_tool
-from glue.viewers.common.qt.tool import CheckableTool, Tool
+from glue.viewers.common.qt.tool import CheckableTool
 from glue.utils import nonpartial
 from glue.utils.qt import load_ui
 from glue.plugins.tools.spectrum_tool.qt import SpectrumTool
 from glue.plugins.tools.pv_slicer.qt import PVSlicerMode
-from glue.external.echo import add_callback
 
 from glue_ginga.qt.utils import cmap2pixmap, ginga_graphic_to_roi
 
@@ -479,8 +478,14 @@ class GingaSpectrumMode(GingaROIMode):
         self._shape_obj = None
         self._shape = 'rectangle'
 
+        self.viewer.state.add_callback('reference_data', self._display_data_hook)
+
         self._tool = SpectrumTool(self.viewer, self)
         #self._move_callback = self._tool._move_profile
+
+    def _display_data_hook(self, data):
+        if data is not None:
+            self.enabled = data.ndim == 3
 
     def menu_actions(self):
 
@@ -555,9 +560,12 @@ class GingaPVSlicerMode(GingaROIMode):
         self._path_obj = None
         self._shape = 'freepath'
 
-        # TODO: re-implement this once the rest is fixed
-        # add_callback(viewer.client, 'display_data', self._display_data_hook)
+        self.viewer.state.add_callback('reference_data', self._display_data_hook)
         self._slice_widget = None
+
+    def _display_data_hook(self, data):
+        if data is not None:
+            self.enabled = data.ndim == 3
 
     def menu_actions(self):
 
@@ -578,10 +586,6 @@ class GingaPVSlicerMode(GingaROIMode):
         self.viewer._set_roi_mode(self, mode, 'draw',
                                   color='red', linewidth=2, linestyle='solid',
                                   fill=False, alpha=1.0)
-
-    def _display_data_hook(self, data):
-        if data is not None:
-            self.enabled = data.ndim > 2
 
     def _clear_path(self):
         if self._path_obj is not None:

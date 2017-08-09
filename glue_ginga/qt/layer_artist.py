@@ -43,15 +43,8 @@ class GingaLayerArtist(LayerArtistBase):
         self._sync_zorder = keep_in_sync(self, 'zorder', self.state, 'zorder')
         self._sync_visible = keep_in_sync(self, 'visible', self.state, 'visible')
 
-        self.state.add_callback('zorder', self._zorder_changed)
-
-    def _zorder_changed(self, *args):
-        try:
-            canvas_img = self._canvas.get_object_by_tag(self._tag)
-        except KeyError:
-            pass
-        else:
-            canvas_img.set_zorder(self.state.zorder)
+        self.state.add_global_callback(self.update)
+        self._viewer_state.add_global_callback(self.update)
 
     def clear(self):
         self._canvas.delete_objects_by_tag([self._tag], redraw=True)
@@ -64,6 +57,14 @@ class GingaLayerArtist(LayerArtistBase):
 
     def __gluestate__(self, context):
         return dict(state=context.id(self.state))
+
+    def update(self, **kwargs):
+        try:
+            canvas_img = self._canvas.get_object_by_tag(self._tag)
+        except KeyError:
+            pass
+        else:
+            canvas_img.set_zorder(self.state.zorder)
 
 
 class GingaImageLayer(GingaLayerArtist):
@@ -78,14 +79,6 @@ class GingaImageLayer(GingaLayerArtist):
         self._tag = '_image'
         self._img = DataImage(self.state)
 
-        self.state.add_callback('visible', self._visible_changed)
-
-    def _visible_changed(self, *args):
-        if self.state.visible and self._img:
-            self._canvas.set_image(self._img)
-        elif not self.state.visible:
-            self.clear()
-
     def _ensure_added(self):
         """
         Add artist to canvas if needed
@@ -95,11 +88,14 @@ class GingaImageLayer(GingaLayerArtist):
         except KeyError:
             self._canvas.set_image(self._img)
 
-    def update(self):
+    def update(self, **kwargs):
 
-        self._ensure_added()
+        super(GingaImageLayer, self).update(**kwargs)
 
-        if not self.visible:
+        if self.state.visible and self._img:
+            self._ensure_added()
+        elif not self.state.visible:
+            self.clear()
             return
 
         self.redraw()
@@ -122,11 +118,6 @@ class GingaSubsetImageLayer(GingaLayerArtist):
         # to wrap into a ginga canvas type.
         Image = self._canvas.get_draw_class('image')
         self._cimg = Image(0, 0, self._img, alpha=0.5, flipy=False)
-
-        # self.state.add_global_callback(self._update)
-
-        self.state.add_callback('zorder', self._zorder_changed)
-        self.state.add_callback('visible', self._visible_changed)
 
     def _visible_changed(self, *args):
         if self.state.visible and self._cimg:
@@ -158,14 +149,17 @@ class GingaSubsetImageLayer(GingaLayerArtist):
         except KeyError:
             self._canvas.add(self._cimg, tag=self._tag, redraw=False)
 
-    def update(self):
+    def update(self, **kwargs):
+
+        super(GingaSubsetImageLayer, self).update(**kwargs)
 
         self._check_enabled()
 
-        if self.enabled and self.visible:
+        if self.state.visible and self._img:
             self._ensure_added()
-        else:
+        elif not self.state.visible:
             self.clear()
+            return
 
         self.redraw(whence=0)
 
@@ -241,7 +235,7 @@ class SubsetImage(BaseImage.BaseImage):
         """
         Turn a boolean mask into a 4-channel RGBA image
         """
-        r, g, b = self.layer_state.color
+        r, g, b = color2rgb(self.layer_state.color)
         ones = mask * 0 + 255
         alpha = mask * 127
         result = np.dstack((ones * r, ones * g, ones * b, alpha)).astype(np.uint8)
@@ -259,7 +253,10 @@ class SubsetImage(BaseImage.BaseImage):
         """
         Extract a view from the 2D subset mask.
         """
-        return self.layer_state.get_sliced_data(view=view)
+        try:
+            return self._rgb_from_mask(self.layer_state.get_sliced_data(view=view))
+        except IncompatibleAttribute:
+            return np.zeros(self.shape + (4,))
 
     def _set_minmax(self):
         # we already know the data bounds

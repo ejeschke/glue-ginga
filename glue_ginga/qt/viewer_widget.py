@@ -49,7 +49,7 @@ class GingaViewer(BaseDataViewerWithState):
     tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:lasso',
              'ginga:xrange', 'ginga:yrange', 'ginga:pan', 'ginga:freepan',
              'ginga:rotate', 'ginga:contrast', 'ginga:cuts', 'ginga:dist',
-             'ginga:colormap']
+             'ginga:colormap', 'ginga:spectrum', 'ginga:slicer']
 
     def __init__(self, session, parent=None, state=None):
 
@@ -131,6 +131,8 @@ class GingaViewer(BaseDataViewerWithState):
             readout_w = readout_w.get_widget()
         layout.addWidget(readout_w, stretch=0)
         topw.setLayout(layout)
+
+        self._crosshair_id = '_crosshair'
 
         self.setCentralWidget(topw)
 

@@ -12,7 +12,7 @@ os:
 env:
   global:
     - SETUP_XVFB=True
-    - CONDA_CHANNELS="conda-forge"
+    - CONDA_CHANNELS="glueviz/label/dev"
     - CONDA_CHANNEL_PRIORITY=True
     - CONDA_DEPENDENCIES="glueviz pytest mock pyqt"
     - PIP_DEPENDENCIES="ginga"

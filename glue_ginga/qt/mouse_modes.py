@@ -555,6 +555,7 @@ class GingaPVSlicerMode(GingaROIMode):
         self._path_obj = None
         self._shape = 'freepath'
 
+        # TODO: re-implement this once the rest is fixed
         # add_callback(viewer.client, 'display_data', self._display_data_hook)
         self._slice_widget = None
 

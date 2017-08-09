@@ -31,7 +31,7 @@ from glue.core.edit_subset_mode import EditSubsetMode
 # The following is to ensure that the mouse modes get registered
 from glue_ginga.qt import mouse_modes  # noqa
 
-from glue_ginga.qt.client import GingaImageLayer, GingaSubsetImageLayer
+from glue_ginga.qt.layer_artist import GingaImageLayer, GingaSubsetImageLayer
 
 __all__ = ['GingaViewer']
 

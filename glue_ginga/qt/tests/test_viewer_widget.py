@@ -4,10 +4,11 @@ import pytest
 
 pytest.importorskip('ginga')
 
-from glue.viewers.image.qt.tests.test_viewer_widget import _TestImageWidgetBase
+from glue.viewers.common.qt.tests.test_data_viewer import BaseTestDataViewer
 
-from ..viewer_widget import GingaWidget
+from ..viewer_widget import GingaViewer
 
 
-class TestGingaWidget(_TestImageWidgetBase):
-    widget_cls = GingaWidget
+class TestGingaViewer(BaseTestDataViewer):
+    ndim = 2
+    widget_cls = GingaViewer

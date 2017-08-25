@@ -186,6 +186,6 @@ setup(name='glue-ginga',
       packages=find_packages(),
       package_data={},
       entry_points=entry_points,
-      install_requires=['glueviz>=0.9.0',
+      install_requires=['glue-core>=0.11.0',
                         'ginga>=2.6.1']
       )

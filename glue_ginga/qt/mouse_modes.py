@@ -7,12 +7,11 @@ from ginga import cmap as ginga_cmap
 
 from qtpy import QtGui, QtWidgets
 from glue.config import viewer_tool
-from glue.viewers.common.qt.tool import CheckableTool, Tool
+from glue.viewers.common.qt.tool import CheckableTool
 from glue.utils import nonpartial
 from glue.utils.qt import load_ui
 from glue.plugins.tools.spectrum_tool.qt import SpectrumTool
 from glue.plugins.tools.pv_slicer.qt import PVSlicerMode
-from glue.external.echo import add_callback
 
 from glue_ginga.qt.utils import cmap2pixmap, ginga_graphic_to_roi
 
@@ -49,14 +48,15 @@ class GingaROIMode(CheckableTool):
         # typical case is we want to remove the shape we just drew
         # from the canvas because we will be replacing it with a ROI
         viewer.canvas.delete_object_by_tag(tag, redraw=False)
-            
+
         roi = ginga_graphic_to_roi(obj)
 
         viewer.apply_roi(roi)
-        
+
 
 class GingaPathMode(GingaROIMode):
     pass
+
 
 @viewer_tool
 class RectangleROIMode(GingaROIMode):
@@ -84,7 +84,7 @@ class CircleROIMode(GingaROIMode):
     tool_tip = 'Define a circular region of interest'
 
     def activate(self):
-        self.viewer._set_roi_mode(self, 'circle',  'draw',
+        self.viewer._set_roi_mode(self, 'circle', 'draw',
                                   color='cyan', linewidth=2, linestyle='dash',
                                   fill=True, fillcolor='yellow', fillalpha=0.5)
 
@@ -286,7 +286,7 @@ class ContrastMode(CheckableTool):
 
     # TODO: uncomment when we have updated Ginga to version that contains
     # the restore_contrast() method
-    
+
     ## def menu_actions(self):
     ##     result = []
 
@@ -459,7 +459,7 @@ class ColormapMode(CheckableTool):
         for label in ginga_cmap.get_names():
             cmap = ginga_cmap.get_cmap(label)
             a = ColormapAction(label, cmap, self.viewer)
-            a.triggered.connect(nonpartial(self.viewer.client.set_cmap, cmap))
+            a.triggered.connect(nonpartial(self.viewer.set_cmap, cmap))
             acts.append(a)
         return acts
 
@@ -478,8 +478,14 @@ class GingaSpectrumMode(GingaROIMode):
         self._shape_obj = None
         self._shape = 'rectangle'
 
+        self.viewer.state.add_callback('reference_data', self._display_data_hook)
+
         self._tool = SpectrumTool(self.viewer, self)
         #self._move_callback = self._tool._move_profile
+
+    def _display_data_hook(self, data):
+        if data is not None:
+            self.enabled = data.ndim == 3
 
     def menu_actions(self):
 
@@ -518,7 +524,7 @@ class GingaSpectrumMode(GingaROIMode):
 
     def opn_init(self, viewer, tag):
         self.clear()
-        
+
     def opn_exec(self, viewer, tag, obj):
         self.clear()
         self._shape_obj = obj
@@ -554,8 +560,12 @@ class GingaPVSlicerMode(GingaROIMode):
         self._path_obj = None
         self._shape = 'freepath'
 
-        add_callback(viewer.client, 'display_data', self._display_data_hook)
+        self.viewer.state.add_callback('reference_data', self._display_data_hook)
         self._slice_widget = None
+
+    def _display_data_hook(self, data):
+        if data is not None:
+            self.enabled = data.ndim == 3
 
     def menu_actions(self):
 
@@ -577,10 +587,6 @@ class GingaPVSlicerMode(GingaROIMode):
                                   color='red', linewidth=2, linestyle='solid',
                                   fill=False, alpha=1.0)
 
-    def _display_data_hook(self, data):
-        if data is not None:
-            self.enabled = data.ndim > 2
-
     def _clear_path(self):
         if self._path_obj is not None:
             try:
@@ -600,12 +606,10 @@ class GingaPVSlicerMode(GingaROIMode):
 
     def opn_init(self, viewer, tag):
         self._clear_path()
-        
+
     def opn_exec(self, viewer, tag, obj):
         self._clear_path()
         self._path_obj = obj
-        
+
         vx, vy = zip(*obj.points)
         self._build_from_vertices(vx, vy)
-
-

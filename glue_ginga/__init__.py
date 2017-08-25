@@ -1,11 +1,14 @@
-from .version import __version__
+from .version import __version__  # noqa
+
 
 def setup():
-    from .qt import mouse_modes
+
     try:
-        from .qt.viewer_widget import GingaWidget
+        import ginga  # noqa
     except ImportError:
         raise ImportError("ginga is required")
-    else:
-        from glue.config import qt_client
-        qt_client.add(GingaWidget)
+
+    from .qt import mouse_modes  # noqa
+    from .qt.viewer_widget import GingaViewer
+    from glue.config import qt_client
+    qt_client.add(GingaViewer)

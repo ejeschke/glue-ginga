@@ -12,9 +12,9 @@ os:
 env:
   global:
     - SETUP_XVFB=True
-    - CONDA_CHANNELS="conda-forge"
+    - CONDA_CHANNELS="glueviz"
     - CONDA_CHANNEL_PRIORITY=True
-    - CONDA_DEPENDENCIES="glueviz pytest mock pyqt"
+    - CONDA_DEPENDENCIES="glue-core pytest mock pyqt"
     - PIP_DEPENDENCIES="ginga"
   matrix:
     - PYTHON_VERSION=2.7 PYQT_VERSION=4

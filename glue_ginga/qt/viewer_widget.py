@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import sys
 import os
 
 from qtpy import QtWidgets, PYQT5
@@ -22,26 +21,39 @@ from ginga.Bindings import ImageViewBindings
 from ginga.util.paths import ginga_home
 from ginga import colors
 
-from glue.viewers.image.qt import ImageWidgetBase
+from glue.viewers.common.qt.data_viewer_with_state import DataViewerWithState
 from glue.viewers.common.qt.toolbar import BasicToolbar
-from glue_ginga.qt.client import GingaClient
+from glue.viewers.image.state import ImageViewerState
+from glue.viewers.image.qt.options_widget import ImageOptionsWidget
+from glue.core import command
+from glue.core.edit_subset_mode import EditSubsetMode
+
+# The following is to ensure that the mouse modes get registered
+from glue_ginga.qt import mouse_modes  # noqa
+
+from glue_ginga.qt.layer_artist import GingaImageLayer, GingaSubsetImageLayer
+
+__all__ = ['GingaViewer']
 
 
-__all__ = ['GingaWidget']
-
-
-class GingaWidget(ImageWidgetBase):
+class GingaViewer(DataViewerWithState):
 
     LABEL = "Ginga Viewer"
 
     _toolbar_cls = BasicToolbar
+    _state_cls = ImageViewerState
+    _options_cls = ImageOptionsWidget
+    _data_artist_cls = GingaImageLayer
+    _subset_artist_cls = GingaSubsetImageLayer
+
     tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:lasso',
-             'ginga:xrange', 'ginga:yrange',
-             'ginga:pan', 'ginga:freepan', 'ginga:rotate',
-             'ginga:contrast', 'ginga:cuts', 'ginga:dist',
+             'ginga:xrange', 'ginga:yrange', 'ginga:pan', 'ginga:freepan',
+             'ginga:rotate', 'ginga:contrast', 'ginga:cuts', 'ginga:dist',
              'ginga:colormap', 'ginga:spectrum', 'ginga:slicer']
 
-    def __init__(self, session, parent=None):
+    def __init__(self, session, parent=None, state=None):
+
+        super(GingaViewer, self).__init__(session, parent, state=state)
 
         self.logger = log.get_logger(name='ginga', level=20,
                                      # switch commenting for debugging
@@ -69,7 +81,6 @@ class GingaWidget(ImageWidgetBase):
         # enable interactive features
         bindings = self.viewer.get_bindings()
         bindings.enable_all(True)
-        self.canvas.add_callback('none-move', self.motion_readout)
         self.canvas.register_for_cursor_drawing(self.viewer)
         self.canvas.add_callback('draw-event', self._apply_roi_cb)
         self.canvas.add_callback('edit-event', self._update_roi_cb)
@@ -104,13 +115,6 @@ class GingaWidget(ImageWidgetBase):
         self.roi_tag = None
         self.opn_obj = None
 
-        super(GingaWidget, self).__init__(session, parent)
-
-    def make_client(self):
-        return GingaClient(self._data, self.viewer, self._layer_artist_container)
-
-    def make_central_widget(self):
-
         topw = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -127,7 +131,16 @@ class GingaWidget(ImageWidgetBase):
             readout_w = readout_w.get_widget()
         layout.addWidget(readout_w, stretch=0)
         topw.setLayout(layout)
-        return topw
+
+        self._crosshair_id = '_crosshair'
+
+        self.setCentralWidget(topw)
+
+    def get_layer_artist(self, cls, layer=None, layer_state=None):
+        if layer_state is not None and layer_state.viewer_state is None:
+            layer_state.viewer_state = self.state
+        return cls(layer=layer, layer_state=layer_state,
+                   canvas=self.canvas, viewer_state=self.state)
 
     def match_colorbar(self, canvas, colorbar):
         rgbmap = self.viewer.get_rgbmap()
@@ -150,13 +163,10 @@ class GingaWidget(ImageWidgetBase):
         # XXX need better way of setting draw contexts
         self.canvas.draw_context = self
         self.canvas.set_drawtype(name, **kwargs)
-        ## bm = self.viewer.get_bindmap()
-        ## bm.set_mode('draw', mode_type='locked')
 
     def _clear_roi_cb(self, canvas, *args):
         if self.opn_obj is not None:
             self.opn_obj.opn_init(self, self.roi_tag)
-
         else:
             try:
                 self.canvas.delete_object_by_tag(self.roi_tag)
@@ -182,39 +192,7 @@ class GingaWidget(ImageWidgetBase):
             return
         if self.opn_obj is None:
             return
-
         self.opn_obj.opn_update(self, obj)
-
-    def _tweak_geometry(self):
-        super(GingaWidget, self)._tweak_geometry()
-
-        # rgb mode not supported yet, so hide option
-        self.ui.monochrome.hide()
-        self.ui.rgb.hide()
-
-    def motion_readout(self, canvas, button, data_x, data_y):
-        """This method is called when the user moves the mouse around the Ginga
-        canvas.
-        """
-
-        d = self.client.point_details(data_x, data_y)
-
-        # Get the value under the data coordinates
-        try:
-            # value = fitsimage.get_data(data_x, data_y)
-            # We report the value across the pixel, even though the coords
-            # change halfway across the pixel
-            value = self.viewer.get_data(int(data_x + 0.5), int(data_y + 0.5))
-
-        except Exception:
-            value = None
-
-        x_lbl, y_lbl = d['labels'][0], d['labels'][1]
-        # x_txt, y_txt = d['world'][0], d['world'][1]
-
-        text = "%s  %s  X=%.2f  Y=%.2f  Value=%s" % (
-            x_lbl, y_lbl, data_x, data_y, value)
-        self.readout.set_text(text)
 
     def mode_cb(self, modname, tf):
         """This method is called when a toggle button in the toolbar is pressed
@@ -247,3 +225,35 @@ class GingaWidget(ImageWidgetBase):
             self.mode_w.setChecked(False)
             self.mode_w = None
         return True
+
+    def set_cmap(self, cmap):
+        self.canvas.set_cmap(cmap)
+
+    def show_crosshairs(self, x, y):
+        self.clear_crosshairs()
+        c = self.canvas.viewer.get_draw_class('point')(x, y, 6, color='red', style='plus')
+        self.canvas.add(c, tag=self._crosshair_id, redraw=True)
+
+    def clear_crosshairs(self):
+        try:
+            self.canvas.delete_objects_by_tag([self._crosshair_id], redraw=False)
+        except:
+            pass
+
+    def apply_roi(self, roi):
+        cmd = command.ApplyROI(data_collection=self._data,
+                               roi=roi, apply_func=self._apply_roi)
+        self._session.command_stack.do(cmd)
+
+    def _apply_roi(self, roi):
+
+        x_comp = self.state.x_att.parent.get_component(self.state.x_att)
+        y_comp = self.state.y_att.parent.get_component(self.state.y_att)
+
+        subset_state = x_comp.subset_from_roi(self.state.x_att, roi,
+                                              other_comp=y_comp,
+                                              other_att=self.state.y_att,
+                                              coord='x')
+
+        mode = EditSubsetMode()
+        mode.update(self._data, subset_state)

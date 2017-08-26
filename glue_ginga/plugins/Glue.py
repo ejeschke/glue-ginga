@@ -310,7 +310,7 @@ Press "Close" to close this plugin. This also closes the associated Glue session
         # self.glue_app._create_terminal()
         sgeo = self.glue_app.app.desktop().screenGeometry()
         self.glue_app.resize(sgeo.width() * 0.9, sgeo.height() * 0.9)
-        self.glue_app.show()
+        self.glue_app.start(maximized=False)
         # self.glue_app.lower()
 
         # Toggle buttons accordingly.
@@ -375,7 +375,7 @@ def qglue():
     # Suppress pesky Glue warnings.
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', GlueDeprecationWarning)
-        ga = GlueApplication(data_collection=dc, maximized=False)
+        ga = GlueApplication(data_collection=dc)
 
     return ga
 

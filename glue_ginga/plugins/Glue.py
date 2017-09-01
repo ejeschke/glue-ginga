@@ -235,7 +235,10 @@ Press "Close" to close this plugin. This also closes the associated Glue session
             self.fv.show_error("No data in channel '%s'" % (channel.name))
             return
 
-        data_np = image.get_mddata()
+        if isinstance(image, AstroTable.AstroTable):
+            data_np = image.get_data()
+        else:
+            data_np = image.get_mddata()
         name = image.get('name', 'noname')
         kwargs = {name: data_np}
 

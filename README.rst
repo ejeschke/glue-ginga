@@ -13,6 +13,8 @@ which can be loaded as follows::
 
     ginga --modules=glue\_ginga.plugins.Glue
 
+This is not compatible with Python 2.
+
 Features
 --------
 

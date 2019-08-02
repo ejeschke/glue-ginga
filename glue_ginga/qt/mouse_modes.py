@@ -7,7 +7,7 @@ from ginga import cmap as ginga_cmap
 
 from qtpy import QtGui, QtWidgets
 from glue.config import viewer_tool
-from glue.viewers.common.qt.tool import CheckableTool
+from glue.viewers.common.tool import CheckableTool
 from glue.utils import nonpartial
 from glue.utils.qt import load_ui
 from glue.plugins.tools.pv_slicer.qt import PVSlicerMode

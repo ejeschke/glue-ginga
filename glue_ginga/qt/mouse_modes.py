@@ -7,11 +7,12 @@ from ginga import cmap as ginga_cmap
 
 from qtpy import QtGui, QtWidgets
 from glue.config import viewer_tool
-from glue.viewers.common.qt.tool import CheckableTool
+from glue.viewers.common.qt.tool import CheckableTool, DropdownTool
 from glue.utils import nonpartial
 from glue.utils.qt import load_ui
-from glue.plugins.tools.spectrum_tool.qt import SpectrumTool
-from glue.plugins.tools.pv_slicer.qt import PVSlicerMode
+from glue.viewers.image.pixel_selection_subset_state import PixelSubsetState
+from glue.core.command import ApplySubsetState
+from glue.core.edit_subset_mode import ReplaceMode
 
 from glue_ginga.qt.utils import cmap2pixmap, ginga_graphic_to_roi
 
@@ -20,8 +21,7 @@ GINGA_HOME = os.path.split(sys.modules['ginga'].__file__)[0]
 GINGA_ICON_DIR = os.path.join(GINGA_HOME, 'icons')
 
 # add matplotlib colormaps
-# TODO: glue menu seems extremely slow if we add them all
-#ginga_cmap.add_matplotlib_cmaps(fail_on_import_error=False)
+ginga_cmap.add_matplotlib_cmaps(fail_on_import_error=False)
 
 
 class GingaROIMode(CheckableTool):
@@ -54,10 +54,6 @@ class GingaROIMode(CheckableTool):
         viewer.apply_roi(roi)
 
 
-class GingaPathMode(GingaROIMode):
-    pass
-
-
 @viewer_tool
 class RectangleROIMode(GingaROIMode):
 
@@ -72,7 +68,8 @@ class RectangleROIMode(GingaROIMode):
                                   fill=True, fillcolor='yellow', fillalpha=0.5)
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'rectangle', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'rectangle', None)
 
 
 @viewer_tool
@@ -89,7 +86,8 @@ class CircleROIMode(GingaROIMode):
                                   fill=True, fillcolor='yellow', fillalpha=0.5)
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'circle', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'circle', None)
 
 
 @viewer_tool
@@ -112,7 +110,8 @@ class PolygonROIMode(GingaROIMode):
                                   fill=True, fillcolor='yellow', fillalpha=0.5)
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'polygon', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'polygon', None)
 
 
 @viewer_tool
@@ -132,7 +131,8 @@ class LassoROIMode(GingaROIMode):
                                   fill=True, fillcolor='yellow', fillalpha=0.5)
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'freepolygon', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'freepolygon', None)
 
 
 @viewer_tool
@@ -153,7 +153,8 @@ class PathROIMode(GingaROIMode):
                                   color='cyan', linewidth=2, linestyle='dash')
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'path', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'path', None)
 
 
 @viewer_tool
@@ -175,7 +176,8 @@ class HRangeMode(GingaROIMode):
                                   linewidth=0)
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'xrange', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'xrange', None)
 
 
 @viewer_tool
@@ -197,7 +199,8 @@ class VRangeMode(GingaROIMode):
                                   linewidth=0)
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'yrange', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'yrange', None)
 
 
 @viewer_tool
@@ -208,16 +211,68 @@ class PickMode(GingaROIMode):
     Defines single point selections.
     """
 
-    icon = 'glue_yrange_select'
+    icon = 'glue_point'
     tool_id = 'ginga:pick'
-    action_text = 'Pick'
+    action_text = 'Click on the item to select'
     tool_tip = 'Select a single item'
 
     def activate(self):
         self.viewer._set_roi_mode(self, 'point', 'draw')
 
     def deactivate(self):
-        self.viewer._set_roi_mode(None, 'point', None)
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'point', None)
+
+
+@viewer_tool
+class CrossHair(GingaROIMode):
+    """
+    Selects pixel under mouse cursor.
+
+    Defines single point selections.
+    """
+
+    icon = 'glue_crosshair'
+    tool_id = 'ginga:crosshair'
+    action_text = 'Select a single pixel based on mouse location'
+    tool_tip = 'Select a single item'
+
+    def activate(self):
+        try:
+            self.viewer.canvas.delete_object_by_tag('_crosshair')
+        except Exception:
+            pass
+
+        self.viewer.session.edit_subset_mode.mode = ReplaceMode
+        self.viewer._set_roi_mode(self, 'crosshair', 'draw',
+                                  color='cyan', linewidth=1, linestyle='solid')
+
+    def deactivate(self):
+        if self.viewer is not None:
+            self.viewer._set_roi_mode(None, 'crosshair', None)
+
+    def opn_exec(self, viewer, tag, obj):
+
+        x = int(round(obj.x))
+        y = int(round(obj.y))
+
+        # delete old object and add new at pixel center
+        viewer.canvas.delete_object_by_tag(tag, redraw=False)
+
+        n_obj = obj.__class__(x, y, color=obj.color, text= ' ', linewidth=1,
+                              linestyle='solid')
+        viewer.canvas.add(n_obj, tag='_crosshair')
+
+        slices = [slice(None)] * viewer.state.reference_data.ndim
+        slices[viewer.state.x_att.axis] = slice(x, x + 1)
+        slices[viewer.state.y_att.axis] = slice(y, y + 1)
+
+        subset_state = PixelSubsetState(viewer.state.reference_data, slices)
+
+        cmd = ApplySubsetState(data_collection=viewer._data,
+                               subset_state=subset_state,
+                               override_mode=None)
+        viewer._session.command_stack.do(cmd)
 
 
 @viewer_tool
@@ -233,7 +288,8 @@ class PanMode(CheckableTool):
         self.viewer.mode_cb('pan', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('pan', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('pan', False)
 
 
 @viewer_tool
@@ -250,7 +306,8 @@ class FreePanMode(CheckableTool):
         self.viewer.mode_cb('freepan', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('freepan', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('freepan', False)
 
 
 @viewer_tool
@@ -265,7 +322,8 @@ class RotateMode(CheckableTool):
         self.viewer.mode_cb('rotate', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('rotate', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('rotate', False)
 
 
 @viewer_tool
@@ -282,19 +340,17 @@ class ContrastMode(CheckableTool):
         self.viewer.mode_cb('contrast', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('contrast', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('contrast', False)
 
-    # TODO: uncomment when we have updated Ginga to version that contains
-    # the restore_contrast() method
+    def menu_actions(self):
+        result = []
 
-    ## def menu_actions(self):
-    ##     result = []
+        a = QtWidgets.QAction("Restore", None)
+        a.triggered.connect(nonpartial(self.restore_cb))
+        result.append(a)
 
-    ##     a = QtWidgets.QAction("Restore", None)
-    ##     a.triggered.connect(nonpartial(self.restore_cb))
-    ##     result.append(a)
-
-    ##     return result
+        return result
 
     def restore_cb(self):
         gviewer = self.viewer.viewer
@@ -302,7 +358,7 @@ class ContrastMode(CheckableTool):
 
 
 @viewer_tool
-class CutsMode(CheckableTool):
+class CutsMode(DropdownTool):
 
     tool_id = 'ginga:cuts'
     icon = os.path.join(GINGA_ICON_DIR, 'cuts_48.png')
@@ -321,7 +377,8 @@ class CutsMode(CheckableTool):
         self.viewer.mode_cb('cuts', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('cuts', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('cuts', False)
 
     def get_vmin_vmax(self):
         gviewer = self.viewer.viewer
@@ -403,17 +460,19 @@ class CutsMode(CheckableTool):
 
 
 @viewer_tool
-class DistributionMode(CheckableTool):
+class DistributionMode(DropdownTool):
 
     tool_id = 'ginga:dist'
     icon = os.path.join(GINGA_ICON_DIR, 'histogram_48.png')
-    tool_tip = ('Adjust value distribution of the image')
+    tool_tip = ('SCROLL to adjust value distribution of the image')
+    status_tip = ('SCROLL to adjust value distribution of the image')
 
     def activate(self):
         self.viewer.mode_cb('dist', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('dist', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('dist', False)
 
     def set_dist(self, name):
         gviewer = self.viewer.viewer
@@ -441,18 +500,20 @@ class ColormapAction(QtWidgets.QAction):
 
 
 @viewer_tool
-class ColormapMode(CheckableTool):
+class ColormapMode(DropdownTool):
 
     icon = 'glue_rainbow'
     tool_id = 'ginga:colormap'
     action_text = 'Set color map'
-    tool_tip = 'Set the color map used for the image'
+    tool_tip = 'SCROLL to set the color map used for the image'
+    status_tip = 'SCROLL to set the color map used for the image'
 
     def activate(self):
         self.viewer.mode_cb('cmap', True)
 
     def deactivate(self):
-        self.viewer.mode_cb('cmap', False)
+        if self.viewer is not None:
+            self.viewer.mode_cb('cmap', False)
 
     def menu_actions(self):
         acts = []
@@ -462,154 +523,3 @@ class ColormapMode(CheckableTool):
             a.triggered.connect(nonpartial(self.viewer.set_cmap, cmap))
             acts.append(a)
         return acts
-
-
-@viewer_tool
-class GingaSpectrumMode(GingaROIMode):
-
-    icon = 'glue_spectrum'
-    tool_id = 'ginga:spectrum'
-    action_text = 'Spectrum'
-    tool_tip = 'Extract a spectrum from the selection'
-
-    def __init__(self, viewer, **kwargs):
-        super(GingaSpectrumMode, self).__init__(viewer, **kwargs)
-
-        self._shape_obj = None
-        self._shape = 'rectangle'
-
-        self.viewer.state.add_callback('reference_data', self._display_data_hook)
-
-        self._tool = SpectrumTool(self.viewer, self)
-        #self._move_callback = self._tool._move_profile
-
-    def _display_data_hook(self, data):
-        if data is not None:
-            self.enabled = data.ndim == 3
-
-    def menu_actions(self):
-
-        result = []
-
-        a = QtWidgets.QAction('Rectangle', None)
-        a.triggered.connect(nonpartial(self.set_roi_tool, 'rectangle'))
-        result.append(a)
-
-        a = QtWidgets.QAction('Circle', None)
-        a.triggered.connect(nonpartial(self.set_roi_tool, 'circle'))
-        result.append(a)
-
-        a = QtWidgets.QAction('Lasso', None)
-        a.triggered.connect(nonpartial(self.set_roi_tool, 'freepolygon'))
-        result.append(a)
-
-        a = QtWidgets.QAction('Polygon', None)
-        a.triggered.connect(nonpartial(self.set_roi_tool, 'polygon'))
-        result.append(a)
-
-        return result
-
-    def set_roi_tool(self, mode):
-        self._shape = mode
-        self.viewer._set_roi_mode(self, mode, 'draw',
-                                  color='red', linewidth=2, linestyle='solid',
-                                  fill=False, alpha=1.0)
-
-    def activate(self):
-        self.set_roi_tool(self._shape)
-
-    def deactivate(self):
-        self.clear()
-        self.viewer._set_roi_mode(None, self._shape, None)
-
-    def opn_init(self, viewer, tag):
-        self.clear()
-
-    def opn_exec(self, viewer, tag, obj):
-        self.clear()
-        self._shape_obj = obj
-
-        roi = ginga_graphic_to_roi(obj)
-        self._tool._update_from_roi(roi)
-
-    def clear(self):
-        if self._shape_obj is not None:
-            try:
-                self.viewer.canvas.delete_object(self._shape_obj)
-            except:
-                pass
-            self._shape_obj = None
-
-    def close(self):
-        self.clear()
-        self._tool.close()
-        return super(GingaSpectrumMode, self).close()
-
-
-@viewer_tool
-class GingaPVSlicerMode(GingaROIMode):
-
-    icon = 'glue_slice'
-    tool_id = 'ginga:slicer'
-    action_text = 'Slice Extraction'
-    tool_tip = 'Extract a slice from an arbitrary path'
-
-    def __init__(self, viewer, **kwargs):
-        super(GingaPVSlicerMode, self).__init__(viewer, **kwargs)
-
-        self._path_obj = None
-        self._shape = 'freepath'
-
-        self.viewer.state.add_callback('reference_data', self._display_data_hook)
-        self._slice_widget = None
-
-    def _display_data_hook(self, data):
-        if data is not None:
-            self.enabled = data.ndim == 3
-
-    def menu_actions(self):
-
-        result = []
-
-        a = QtWidgets.QAction('Freepath', None)
-        a.triggered.connect(nonpartial(self.set_roi_tool, 'freepath'))
-        result.append(a)
-
-        a = QtWidgets.QAction('Path', None)
-        a.triggered.connect(nonpartial(self.set_roi_tool, 'path'))
-        result.append(a)
-
-        return result
-
-    def set_roi_tool(self, mode):
-        self._shape = mode
-        self.viewer._set_roi_mode(self, mode, 'draw',
-                                  color='red', linewidth=2, linestyle='solid',
-                                  fill=False, alpha=1.0)
-
-    def _clear_path(self):
-        if self._path_obj is not None:
-            try:
-                self.viewer.canvas.delete_object(self._path_obj)
-            except:
-                pass
-            self._path_obj = None
-
-    def activate(self):
-        self.set_roi_tool(self._shape)
-
-    def deactivate(self):
-        self._clear_path()
-        self.viewer._set_roi_mode(None, self._shape, None)
-
-    _build_from_vertices = PVSlicerMode._build_from_vertices
-
-    def opn_init(self, viewer, tag):
-        self._clear_path()
-
-    def opn_exec(self, viewer, tag, obj):
-        self._clear_path()
-        self._path_obj = obj
-
-        vx, vy = zip(*obj.points)
-        self._build_from_vertices(vx, vy)

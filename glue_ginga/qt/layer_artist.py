@@ -200,7 +200,7 @@ class DataImage(AstroImage.AstroImage):
         """
         Extract a view from the 2D image.
         """
-        return self.layer_state.get_sliced_data(view=view)
+        return self.layer_state.get_sliced_data(view=view, use_cache=False)
 
 
 class SubsetImage(BaseImage.BaseImage):
@@ -254,7 +254,7 @@ class SubsetImage(BaseImage.BaseImage):
         Extract a view from the 2D subset mask.
         """
         try:
-            return self._rgb_from_mask(self.layer_state.get_sliced_data(view=view))
+            return self._rgb_from_mask(self.layer_state.get_sliced_data(view=view, use_cache=False))
         except IncompatibleAttribute:
             return np.zeros(self.shape + (4,))
 
@@ -265,27 +265,9 @@ class SubsetImage(BaseImage.BaseImage):
         self.minval_noinf = self.minval
         self.maxval_noinf = self.maxval
 
-    def get_scaled_cutout_wdht(self, x1, y1, x2, y2, new_wd, new_ht):
-        doit = getattr(self, '_doit', False)
-        self._doit = not doit
-
-        # default implementation if downsampling
-        if doit or new_wd <= (x2 - x1 + 1) or new_ht <= (y2 - y1 + 1):
-            return super(SubsetImage, self).get_scaled_cutout_wdht(x1, y1, x2, y2,
-                                                                   new_wd, new_ht)
-
-        # if upsampling, prevent extra to_mask() computation
-        x1, x2 = np.clip([x1, x2], 0, self.width - 2).astype(np.int)
-        y1, y2 = np.clip([y1, y2], 0, self.height - 2).astype(np.int)
-
-        result = self._slice(np.s_[y1:y2 + 1, x1:x2 + 1])
-
-        yi = np.linspace(0, result.shape[0], new_ht).astype(np.int).reshape(-1, 1).clip(0, result.shape[0] - 1)
-        xi = np.linspace(0, result.shape[1], new_wd).astype(np.int).reshape(1, -1).clip(0, result.shape[1] - 1)
-        yi, xi = [np.array(a) for a in np.broadcast_arrays(yi, xi)]
-        result = result[yi, xi]
-
-        scale_x = 1.0 * result.shape[1] / (x2 - x1 + 1)
-        scale_y = 1.0 * result.shape[0] / (y2 - y1 + 1)
-
-        return Bunch.Bunch(data=result, scale_x=scale_x, scale_y=scale_y)
+    def get_scaled_cutout2(self, p1, p2, scales, method=None, logger=None):
+        # override this function from ginga.BaseImage to force method='view',
+        # because Glue needs to work solely with slices
+        return super(SubsetImage, self).get_scaled_cutout2(p1, p2, scales,
+                                                           method='view',
+                                                           logger=logger)

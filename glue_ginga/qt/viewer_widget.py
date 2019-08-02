@@ -27,6 +27,7 @@ from glue.viewers.image.state import ImageViewerState
 from glue.viewers.image.qt.options_widget import ImageOptionsWidget
 from glue.core import command
 from glue.core.edit_subset_mode import EditSubsetMode
+from glue.core.subset import roi_to_subset_state
 
 # The following is to ensure that the mouse modes get registered
 from glue_ginga.qt import mouse_modes  # noqa
@@ -47,18 +48,20 @@ class GingaViewer(DataViewerWithState):
     _subset_artist_cls = GingaSubsetImageLayer
 
     tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:lasso',
-             'ginga:xrange', 'ginga:yrange', 'ginga:pan', 'ginga:freepan',
-             'ginga:rotate', 'ginga:contrast', 'ginga:cuts', 'ginga:dist',
-             'ginga:colormap', 'ginga:spectrum', 'ginga:slicer']
+             'ginga:xrange', 'ginga:yrange', # 'ginga:pick', 'ginga:path',
+             # 'ginga:crosshair',
+             'ginga:pan', 'ginga:freepan', 'ginga:rotate',
+             'ginga:contrast', 'ginga:cuts', 'ginga:dist',
+             'ginga:colormap']
 
     def __init__(self, session, parent=None, state=None):
 
-        super(GingaViewer, self).__init__(session, parent, state=state)
+        super(GingaViewer, self).__init__(session, state=state, parent=parent)
 
         self.logger = log.get_logger(name='ginga', level=20,
                                      # switch commenting for debugging
-                                     null=True, log_stderr=False,
-                                     #null=False, log_stderr=True
+                                     #null=True, log_stderr=False,
+                                     null=False, log_stderr=True
                                      )
 
         # load binding preferences if available
@@ -70,6 +73,8 @@ class GingaViewer(DataViewerWithState):
         bd = ImageViewBindings(self.logger, settings=bindprefs)
 
         # make Ginga viewer
+        # TODO: need to make this a CanvasView with separately allocated
+        # canvas!  ImageViewCanvas will be eventually deprecated
         self.viewer = ImageViewCanvas(self.logger, render='widget',
                                       bindings=bd)
         self.canvas = self.viewer
@@ -100,20 +105,23 @@ class GingaViewer(DataViewerWithState):
         # Create settings and set defaults
         settings = self.viewer.get_settings()
         self.settings = settings
-        settings.getSetting('cuts').add_callback('set', self.cut_levels_cb)
+        settings.get_setting('cuts').add_callback('set', self.cut_levels_cb)
         settings.set(autozoom='off', autocuts='override',
                      autocenter='override')
 
         # make color bar, with color maps shared from ginga canvas
         rgbmap = self.viewer.get_rgbmap()
-        self.colorbar = ColorBar.ColorBar(self.logger)
-        rgbmap.add_callback('changed', self.rgbmap_cb, self.viewer)
-        self.colorbar.set_rgbmap(rgbmap)
+        self.colorbar = ColorBar.ColorBar(self.logger, rgbmap=rgbmap,
+                                          link=True)
+        # Ugh
+        self.colorbar.cbar.fontsize = 8
+        self.colorbar.cbar_view.set_desired_size(1, 40)
 
         # make coordinates/value readout
         self.readout = Readout.Readout(-1, 20)
         self.roi_tag = None
         self.opn_obj = None
+        self._crosshair_id = '_crosshair'
 
         topw = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout()
@@ -132,8 +140,6 @@ class GingaViewer(DataViewerWithState):
         layout.addWidget(readout_w, stretch=0)
         topw.setLayout(layout)
 
-        self._crosshair_id = '_crosshair'
-
         self.setCentralWidget(topw)
 
     def get_layer_artist(self, cls, layer=None, layer_state=None):
@@ -141,15 +147,6 @@ class GingaViewer(DataViewerWithState):
             layer_state.viewer_state = self.state
         return cls(layer=layer, layer_state=layer_state,
                    canvas=self.canvas, viewer_state=self.state)
-
-    def match_colorbar(self, canvas, colorbar):
-        rgbmap = self.viewer.get_rgbmap()
-        loval, hival = self.viewer.get_cut_levels()
-        colorbar.set_range(loval, hival)
-        colorbar.set_rgbmap(rgbmap)
-
-    def rgbmap_cb(self, rgbmap, canvas):
-        self.match_colorbar(canvas, self.colorbar)
 
     def cut_levels_cb(self, setting, tup):
         (loval, hival) = tup
@@ -231,29 +228,28 @@ class GingaViewer(DataViewerWithState):
 
     def show_crosshairs(self, x, y):
         self.clear_crosshairs()
-        c = self.canvas.viewer.get_draw_class('point')(x, y, 6, color='red', style='plus')
+        c = self.canvas.viewer.get_draw_class('crosshair')(x, y, color='red')
         self.canvas.add(c, tag=self._crosshair_id, redraw=True)
 
     def clear_crosshairs(self):
         try:
-            self.canvas.delete_objects_by_tag([self._crosshair_id], redraw=False)
+            #self.canvas.delete_objects_by_tag([self._crosshair_id], redraw=False)
+            self.canvas.delete_objects_by_tag([self._crosshair_id], redraw=True)
         except:
             pass
 
-    def apply_roi(self, roi):
-        cmd = command.ApplyROI(data_collection=self._data,
-                               roi=roi, apply_func=self._apply_roi)
-        self._session.command_stack.do(cmd)
+    hide_crosshairs = clear_crosshairs
 
-    def _apply_roi(self, roi):
+    def apply_roi(self, roi, override_mode=None):
 
-        x_comp = self.state.x_att.parent.get_component(self.state.x_att)
-        y_comp = self.state.y_att.parent.get_component(self.state.y_att)
+        if len(self.layers) == 0:
+            return
 
-        subset_state = x_comp.subset_from_roi(self.state.x_att, roi,
-                                              other_comp=y_comp,
-                                              other_att=self.state.y_att,
-                                              coord='x')
+        if self.state.x_att is None or self.state.y_att is None or self.state.reference_data is None:
+            return
 
-        mode = EditSubsetMode()
-        mode.update(self._data, subset_state)
+        subset_state = roi_to_subset_state(roi,
+                                           x_att=self.state.x_att,
+                                           y_att=self.state.y_att)
+
+        self.apply_subset_state(subset_state, override_mode=override_mode)

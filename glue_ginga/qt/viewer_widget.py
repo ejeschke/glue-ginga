@@ -25,8 +25,7 @@ from glue.viewers.common.qt.data_viewer_with_state import DataViewerWithState
 from glue.viewers.common.qt.toolbar import BasicToolbar
 from glue.viewers.image.state import ImageViewerState
 from glue.viewers.image.qt.options_widget import ImageOptionsWidget
-from glue.core import command
-from glue.core.edit_subset_mode import EditSubsetMode
+from glue.core.subset import roi_to_subset_state
 
 # The following is to ensure that the mouse modes get registered
 from glue_ginga.qt import mouse_modes  # noqa
@@ -243,20 +242,10 @@ class GingaViewer(DataViewerWithState):
         except Exception:
             pass
 
-    def apply_roi(self, roi):
-        cmd = command.ApplyROI(data_collection=self._data,
-                               roi=roi, apply_func=self._apply_roi)
-        self._session.command_stack.do(cmd)
+    def apply_roi(self, roi, override_mode=None):
 
-    def _apply_roi(self, roi):
+        subset_state = roi_to_subset_state(roi,
+                                           x_att=self.state.x_att,
+                                           y_att=self.state.y_att)
 
-        x_comp = self.state.x_att.parent.get_component(self.state.x_att)
-        y_comp = self.state.y_att.parent.get_component(self.state.y_att)
-
-        subset_state = x_comp.subset_from_roi(self.state.x_att, roi,
-                                              other_comp=y_comp,
-                                              other_att=self.state.y_att,
-                                              coord='x')
-
-        mode = EditSubsetMode()
-        mode.update(self._data, subset_state)
+        self.apply_subset_state(subset_state, override_mode=override_mode)

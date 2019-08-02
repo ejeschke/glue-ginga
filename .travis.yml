@@ -17,7 +17,6 @@ env:
     - CONDA_DEPENDENCIES="glue-core pytest mock pyqt"
     - PIP_DEPENDENCIES="ginga"
   matrix:
-    - PYTHON_VERSION=3.6 PYQT_VERSION=4
     - PYQT_VERSION=5
     - PYQT_VERSION=5 CONDA_CHANNELS="glueviz/label/dev"
 

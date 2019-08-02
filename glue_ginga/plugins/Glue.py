@@ -51,8 +51,6 @@ class GingaHubListener(Callbacks, HubListener):
                       self._data_added_cb)
         hub.subscribe(self, DataCollectionDeleteMessage,
                       self._data_removed_cb)
-
-        # This needs https://github.com/glue-viz/glue/pull/1168
         hub.subscribe(self, ApplicationClosedMessage,
                       self._app_closed_cb)
 
@@ -82,7 +80,7 @@ class GingaHubListener(Callbacks, HubListener):
     @staticmethod
     def _data_to_image(data):
         ids = data.component_ids()
-        data_np = data[ids[0]]
+        data_np = data.get_component(ids[-1]).data  # Assume last one is image
         data_meta = {}
 
         if hasattr(data.coords, 'header'):
@@ -90,7 +88,14 @@ class GingaHubListener(Callbacks, HubListener):
             h.update(data.coords.header)
             data_meta['header'] = h
 
+        try:
+            path = data._load_log.path
+        except (TypeError, AttributeError):
+            path = None
+
         image = AstroImage.AstroImage(data_np=data_np, metadata=data_meta)
+        if path:
+            image.set(path=path)
 
         if hasattr(data.coords, 'wcs'):
             image.wcs.load_header(data.coords.wcs.to_header())
@@ -243,10 +248,20 @@ Press "Close" to close this plugin. This also closes the associated Glue session
                 h = image.get_header()
                 w = WCS(h)
                 gdata.coords = WCSCoordinates(h, wcs=w)
-                self.glue_app.add_data(**{name: gdata})
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        'ignore', message=(
+                            'add_datasets with an explicit '
+                            'data collection is now deprecated'))
+                    self.glue_app.add_data(**{name: gdata})
             # Table data
             else:
-                self.glue_app.add_data(**kwargs)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        'ignore', message=(
+                            'add_datasets with an explicit '
+                            'data collection is now deprecated'))
+                    self.glue_app.add_data(**kwargs)
 
             self.glue_app.raise_()
 

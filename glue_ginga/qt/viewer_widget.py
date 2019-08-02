@@ -46,19 +46,19 @@ class GingaViewer(DataViewerWithState):
     _data_artist_cls = GingaImageLayer
     _subset_artist_cls = GingaSubsetImageLayer
 
+    # TODO: Add 'ginga:spectrum' back when spectrum mode is fixed.
     tools = ['ginga:rectangle', 'ginga:circle', 'ginga:polygon', 'ginga:lasso',
              'ginga:xrange', 'ginga:yrange', 'ginga:pan', 'ginga:freepan',
              'ginga:rotate', 'ginga:contrast', 'ginga:cuts', 'ginga:dist',
-             'ginga:colormap', 'ginga:spectrum', 'ginga:slicer']
+             'ginga:colormap', 'ginga:slicer']
 
-    def __init__(self, session, parent=None, state=None):
-
-        super(GingaViewer, self).__init__(session, parent, state=state)
+    def __init__(self, session, parent=None):
+        super(GingaViewer, self).__init__(session, parent)
 
         self.logger = log.get_logger(name='ginga', level=20,
                                      # switch commenting for debugging
-                                     null=True, log_stderr=False,
-                                     #null=False, log_stderr=True
+                                     # null=True, log_stderr=False,
+                                     null=False, log_stderr=True
                                      )
 
         # load binding preferences if available
@@ -170,7 +170,7 @@ class GingaViewer(DataViewerWithState):
         else:
             try:
                 self.canvas.delete_object_by_tag(self.roi_tag)
-            except:
+            except Exception:
                 pass
 
     def _apply_roi_cb(self, canvas, tag):
@@ -208,11 +208,12 @@ class GingaViewer(DataViewerWithState):
     def mode_set_cb(self, bm, modname, mtype):
         """This method is called when a mode is selected in the viewer widget.
         NOTE: it may be called when mode_cb() is not called (for example, when
-        a keypress initiates a mode); however, the converse is not true: calling
-        mode_cb() will always result in this method also being called as a result.
+        a keypress initiates a mode); however, the converse is not true:
+        calling mode_cb() will always result in this method also being
+        called as a result.
 
-        This logic is to insure that the toggle buttons are left in a sane state
-        that reflects the current mode, however it was initiated.
+        This logic is to insure that the toggle buttons are left in a sane
+        state that reflects the current mode, however it was initiated.
         """
         if modname in self.mode_actns:
             if self.mode_w and (self.mode_w != self.mode_actns[modname]):
@@ -231,13 +232,15 @@ class GingaViewer(DataViewerWithState):
 
     def show_crosshairs(self, x, y):
         self.clear_crosshairs()
-        c = self.canvas.viewer.get_draw_class('point')(x, y, 6, color='red', style='plus')
+        c = self.canvas.viewer.get_draw_class('point')(
+            x, y, 6, color='red', style='plus')
         self.canvas.add(c, tag=self._crosshair_id, redraw=True)
 
     def clear_crosshairs(self):
         try:
-            self.canvas.delete_objects_by_tag([self._crosshair_id], redraw=False)
-        except:
+            self.canvas.delete_objects_by_tag(
+                [self._crosshair_id], redraw=False)
+        except Exception:
             pass
 
     def apply_roi(self, roi):

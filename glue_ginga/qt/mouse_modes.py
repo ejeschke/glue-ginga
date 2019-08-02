@@ -10,7 +10,6 @@ from glue.config import viewer_tool
 from glue.viewers.common.qt.tool import CheckableTool
 from glue.utils import nonpartial
 from glue.utils.qt import load_ui
-from glue.plugins.tools.spectrum_tool.qt import SpectrumTool
 from glue.plugins.tools.pv_slicer.qt import PVSlicerMode
 
 from glue_ginga.qt.utils import cmap2pixmap, ginga_graphic_to_roi
@@ -21,20 +20,21 @@ GINGA_ICON_DIR = os.path.join(GINGA_HOME, 'icons')
 
 # add matplotlib colormaps
 # TODO: glue menu seems extremely slow if we add them all
-#ginga_cmap.add_matplotlib_cmaps(fail_on_import_error=False)
+# ginga_cmap.add_matplotlib_cmaps(fail_on_import_error=False)
 
 
 class GingaROIMode(CheckableTool):
 
     def opn_init(self, viewer, tag):
         """This method is called when the user clicks down to draw an object.
-        It gets called with any previously drawn object that was kept (or None).
+        It gets called with any previously drawn object that was kept
+        (or None).
         """
         if tag is not None:
             try:
                 # typical case for a ROI is delete any existing shape
                 viewer.canvas.delete_object_by_tag(tag)
-            except:
+            except Exception:
                 pass
 
         return None
@@ -226,7 +226,7 @@ class PanMode(CheckableTool):
     tool_id = 'ginga:pan'
     icon = 'glue_move'
     tool_tip = ('Pan the image by dragging left button\n'
-               '   zoom by dragging right button')
+                '   zoom by dragging right button')
     status_tip = 'CLICK and DRAG (left btn) to pan, (right btn) to zoom '
 
     def activate(self):
@@ -274,7 +274,7 @@ class ContrastMode(CheckableTool):
     tool_id = 'ginga:contrast'
     icon = 'glue_contrast'
     tool_tip = ('Adjust bias/contrast of the image, ds9-style\n'
-                '  CLICK and DRAG: horizontally to set bias (shift colormap),\n'
+                '  CLICK + DRAG: horizontally to set bias (shift colormap),\n'
                 '    vertically to set contrast (stretch colormap).\n'
                 '  CLICK right btn to restore to normal (colormap)')
 
@@ -287,14 +287,14 @@ class ContrastMode(CheckableTool):
     # TODO: uncomment when we have updated Ginga to version that contains
     # the restore_contrast() method
 
-    ## def menu_actions(self):
-    ##     result = []
+    # def menu_actions(self):
+    #     result = []
 
-    ##     a = QtWidgets.QAction("Restore", None)
-    ##     a.triggered.connect(nonpartial(self.restore_cb))
-    ##     result.append(a)
+    #     a = QtWidgets.QAction("Restore", None)
+    #     a.triggered.connect(nonpartial(self.restore_cb))
+    #     result.append(a)
 
-    ##     return result
+    #     return result
 
     def restore_cb(self):
         gviewer = self.viewer.viewer
@@ -395,9 +395,9 @@ class CutsMode(CheckableTool):
             a.triggered.connect(nonpartial(self.set_autocuts, name))
             result.append(a)
 
-        ## rng = QtWidgets.QAction("Set params...", None)
-        ## #rng.triggered.connect(nonpartial(self.choose_vmin_vmax))
-        ## result.append(rng)
+        # rng = QtWidgets.QAction("Set params...", None)
+        # #rng.triggered.connect(nonpartial(self.choose_vmin_vmax))
+        # result.append(rng)
 
         return result
 
@@ -464,7 +464,8 @@ class ColormapMode(CheckableTool):
         return acts
 
 
-@viewer_tool
+# TODO: Uncomment this when spectrum mode is re-implemented.
+# @viewer_tool
 class GingaSpectrumMode(GingaROIMode):
 
     icon = 'glue_spectrum'
@@ -478,10 +479,14 @@ class GingaSpectrumMode(GingaROIMode):
         self._shape_obj = None
         self._shape = 'rectangle'
 
-        self.viewer.state.add_callback('reference_data', self._display_data_hook)
+        self.viewer.state.add_callback(
+            'reference_data', self._display_data_hook)
 
-        self._tool = SpectrumTool(self.viewer, self)
-        #self._move_callback = self._tool._move_profile
+        # TODO: This needs to be implemented due to Glue refactoring.
+        # self._tool = SpectrumTool(self.viewer, self)
+        raise NotImplementedError('Spectrum mode currently not supported')
+
+        # self._move_callback = self._tool._move_profile
 
     def _display_data_hook(self, data):
         if data is not None:
@@ -536,7 +541,7 @@ class GingaSpectrumMode(GingaROIMode):
         if self._shape_obj is not None:
             try:
                 self.viewer.canvas.delete_object(self._shape_obj)
-            except:
+            except Exception:
                 pass
             self._shape_obj = None
 
@@ -560,7 +565,8 @@ class GingaPVSlicerMode(GingaROIMode):
         self._path_obj = None
         self._shape = 'freepath'
 
-        self.viewer.state.add_callback('reference_data', self._display_data_hook)
+        self.viewer.state.add_callback(
+            'reference_data', self._display_data_hook)
         self._slice_widget = None
 
     def _display_data_hook(self, data):
@@ -591,7 +597,7 @@ class GingaPVSlicerMode(GingaROIMode):
         if self._path_obj is not None:
             try:
                 self.viewer.canvas.delete_object(self._path_obj)
-            except:
+            except Exception:
                 pass
             self._path_obj = None
 

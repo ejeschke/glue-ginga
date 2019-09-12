@@ -8,6 +8,7 @@
 The Glue plugin implements a Glue interface for the Ginga viewer.
 """
 from __future__ import absolute_import, division, print_function
+from six.moves import map
 
 import sys
 import warnings
@@ -21,7 +22,6 @@ from ginga.gw import Widgets
 from ginga.misc.Datasrc import Datasrc
 from ginga.misc.Callback import Callbacks
 from ginga.table import AstroTable
-from ginga.util.six.moves import map
 
 from glue.core import Data
 from glue.core.coordinates import WCSCoordinates

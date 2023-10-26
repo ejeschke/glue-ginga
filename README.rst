@@ -1,3 +1,10 @@
+Status
+======
+This plugin for Glue only works woth very early versions of Glue
+(most likely).
+
+This repository is no longer maintained and has been archived.
+
 Glue-Ginga
 ==========
 
